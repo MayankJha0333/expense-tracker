@@ -18,6 +18,27 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# generated native folders (CNG) — root only, so modules/*/android stays tracked
+/ios
+/android
+
+# local native module build output
+modules/*/android/build/
+modules/*/android/.gradle/
+modules/*/android/.cxx/
+modules/*/ios/build/
+
+# build artifacts (eas build --local, expo export)
+*.apk
+*.aab
+*.ipa
+*.app
+*.dSYM.zip
+
+# EAS local credentials
+credentials.json
+credentials/
+
 # Metro
 .metro-health-check*
 
@@ -25,17 +46,29 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
+
+# testing
+coverage/
 
 # macOS
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# env files
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
 
-# generated native folders
-/ios
-/android
+# editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+
+# Claude Code (shared settings.json stays tracked)
+.claude/settings.local.json
