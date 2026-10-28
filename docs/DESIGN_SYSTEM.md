@@ -124,6 +124,7 @@ Money always uses `tabular` so digits line up.
 | `shadowCard` | Cards, notices | Deep black drop (cards also keep a 1px border) | Soft tint of the primary |
 | `shadowHero` | Hero card | Glow in the accent colour | Strong primary-coloured lift |
 | `shadowRaised` | + button | Accent glow | Primary-coloured lift |
+| `shadowFloat` | Floating tab bar | Deep black drop (bar keeps a 1px border) | Soft primary-tinted lift |
 
 ---
 
@@ -176,7 +177,13 @@ A small outlined label for how something was paid: `UPI`, `HDFC card ••7788`
 - Colours for series come from `series`, in a fixed order per payment method (UPI, card, cash, net banking, other).
 
 ### + button and tab bar
-Five slots: Home · Activity · **+** · Insights · Accounts. The + uses `fab` / `onFab` / `shadowRaised`. The active tab uses `accentInk`, the rest use `muted`.
+Five slots: Home · Activity · **+** · Insights · Accounts. The bar floats; it isn't attached to the screen edge.
+
+- **Bar:** a rounded pill, 64 high, 16 in from each side, 10 above the phone's safe area (`src/components/tabBarSpace.ts`). `surface` fill, 1px `line` border, `shadowFloat`.
+- **Active tab:** one `accentSoft` highlight slides to the open tab (spring). Active icon + label use `accentInk`, the rest `muted`.
+- **+ button:** 62 round, raised 22 above the bar's middle, so it pops out of the pill. `fab` / `onFab` / `shadowRaised`, with a 4px ring in `surface` so it reads as part of the bar. It is drawn as its own layer (not inside the pill) so the raised part still takes taps on Android.
+- **Fade:** a short fade from clear to `bg` sits under the bar so scrolled content doesn't cut hard against it.
+- **Screens:** every tab screen ends its scroll with `useTabBarSpace()` padding, so the last row can scroll clear of the bar.
 
 ### Logo
 A wallet with two bills tucked in and a coin on the clasp. Shapes: `src/lib/logo.ts` (1024 grid). Colours: `palette.logo`, worked out from the family colour, so the logo follows your pick.

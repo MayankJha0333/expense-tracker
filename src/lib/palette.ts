@@ -168,6 +168,8 @@ export type Palette = {
   shadowHero: string;
   /** Floating things: the + button. */
   shadowRaised: string;
+  /** The floating tab bar. */
+  shadowFloat: string;
   /** Empty chart track and empty calendar cell. */
   track: string;
   scrim: string;
@@ -321,6 +323,7 @@ export function midnightPalette(id: MidnightId): Palette {
     shadowCard: '0px 10px 28px rgba(0,0,0,0.45)',
     shadowHero: `0px 18px 40px -12px ${rgba(m.bright, 0.42)}`,
     shadowRaised: `0px 8px 22px ${rgba(m.bright, 0.35)}`,
+    shadowFloat: '0px 14px 34px rgba(0,0,0,0.65)',
     track: line,
     scrim: 'rgba(0,0,0,0.6)',
     series: [m.bright, m.second, m.third, '#F9A8D4', '#71717A'],
@@ -383,6 +386,7 @@ export function electricPalette(id: ElectricId): Palette {
     shadowCard: `0px 10px 28px ${rgba(e.primary, 0.09)}`,
     shadowHero: `0px 20px 40px -14px ${rgba(e.primary, 0.55)}`,
     shadowRaised: `0px 10px 22px ${rgba(e.primary, 0.35)}`,
+    shadowFloat: `0px 14px 34px -6px ${rgba(e.primary, 0.24)}`,
     track,
     scrim: rgba(ink, 0.45),
     series: [e.primary, e.second, e.third, e.fourth, '#8E8E96'],

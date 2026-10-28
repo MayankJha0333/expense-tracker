@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTabBarSpace } from '../../components/tabBarSpace';
 import { billLine, MonthSwitcher } from '../../components/finance';
 import { Card, Divider, Empty, Icon, MixBar, SectionHeader, Txt } from '../../components/ui';
 import { PressScale, Stagger } from '../../components/motion';
@@ -26,6 +27,7 @@ import { radius, space, usePalette } from '../../theme';
 export default function Accounts() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
+  const tabSpace = useTabBarSpace();
   const { txns, month, setMonth, bills, paidBills } = useStore();
 
   const inMonth = useMemo(() => txns.filter((t) => sameMonth(monthOf(t.timestamp), month)), [txns, month]);
@@ -55,7 +57,7 @@ export default function Accounts() {
   return (
     <ScrollView
       style={{ backgroundColor: p.bg }}
-      contentContainerStyle={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: space.xxl, gap: space.xl }}
+      contentContainerStyle={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: tabSpace, gap: space.xl }}
     >
       <Stagger>
       <View style={styles.titleRow}>

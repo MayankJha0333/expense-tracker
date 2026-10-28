@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTabBarSpace } from '../../components/tabBarSpace';
 import { SavingsLine } from '../../components/charts';
 import { Bars, CategoryRow, MonthSwitcher } from '../../components/finance';
 import { AnimatedAmount } from '../../components/AnimatedAmount';
@@ -45,6 +46,7 @@ const SKIP_LABEL: Record<SkipReason, string> = {
 export default function Insights() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
+  const tabSpace = useTabBarSpace();
   const { txns, month, setMonth } = useStore();
   const [view, setView] = useState<View_>('spending');
 
@@ -55,7 +57,7 @@ export default function Insights() {
   return (
     <ScrollView
       style={{ backgroundColor: p.bg }}
-      contentContainerStyle={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: 60, gap: space.xl }}
+      contentContainerStyle={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: tabSpace, gap: space.xl }}
     >
       <Stagger>
       <View style={{ gap: space.md }}>

@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, SectionList, StyleSheet, TextInp
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTabBarSpace } from '../../components/tabBarSpace';
 import { AnimatedAmount } from '../../components/AnimatedAmount';
 import { MonthSwitcher, TxnRow } from '../../components/finance';
 import { enterFade } from '../../components/motion';
@@ -67,6 +68,7 @@ function matches(t: Txn, f: Filter): boolean {
 export default function Activity() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
+  const tabSpace = useTabBarSpace();
   const params = useLocalSearchParams<{ filter?: string }>();
   const { txns, refresh, refreshing, permission, month, setMonth } = useStore();
   const [query, setQuery] = useState('');
@@ -183,7 +185,7 @@ export default function Activity() {
         sections={sections}
         keyExtractor={(t) => t.id}
         stickySectionHeadersEnabled
-        contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl }}
+        contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: tabSpace }}
         refreshControl={
           permission === 'granted' ? <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={p.accent} colors={[p.accent]} /> : undefined
         }

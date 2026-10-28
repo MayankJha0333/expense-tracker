@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTabBarSpace } from '../../components/tabBarSpace';
 import { TxnRow, MonthSwitcher } from '../../components/finance';
 import { AnimatedAmount } from '../../components/AnimatedAmount';
 import { Wordmark } from '../../components/Logo';
@@ -23,6 +24,7 @@ import { space, usePalette } from '../../theme';
 export default function Home() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
+  const tabSpace = useTabBarSpace();
   const { txns, month, setMonth, refresh, refreshing, stats, permission, source, budget, bills, paidBills } = useStore();
 
   const summary = useMemo(() => summarize(txns, month), [txns, month]);
@@ -58,7 +60,7 @@ export default function Home() {
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: space.xxl, gap: space.xl }}
+        contentContainerStyle={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: tabSpace, gap: space.xl }}
         refreshControl={smsOn ? <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={p.accent} colors={[p.accent]} /> : undefined}
       >
         <Stagger>
