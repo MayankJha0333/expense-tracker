@@ -159,9 +159,8 @@ export type Palette = {
   /* ----- The + button and the logo ----- */
   fab: string;
   onFab: string;
-  logoTile: string;
-  logoStem: string;
-  logoArrow: string;
+  /** Every colour in the wallet logo (see lib/logo.ts). */
+  logo: LogoColors;
   /* ----- Elevation (CSS box-shadow strings, used with the `boxShadow` style) ----- */
   /** Cards and list blocks. */
   shadowCard: string;
@@ -177,6 +176,79 @@ export type Palette = {
   /** Text/icons on top of series[1..3] badges. */
   onSeries: string;
 };
+
+/** Blends two #RRGGBB colours: t = 0 gives [a], t = 1 gives [b]. */
+export function mix(a: string, b: string, t: number): string {
+  const ca = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const cb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  return (
+    '#' +
+    ca
+      .map((v, i) => Math.round(Math.max(0, Math.min(255, v + (cb[i] - v) * t))).toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
+  );
+}
+
+/*
+ * The wallet logo: a tile, two bills tucked into a wallet, and a clasp with a coin.
+ * Light (Electric): pale tinted tile, bills in the primary colour, white wallet, yellow coin.
+ * Dark (Midnight): near-black tile with a glow, bills and wallet in the bright colour.
+ * Everything is worked out from the family's key colour, so the logo follows your pick.
+ */
+export type LogoColors = {
+  tileTop: string;
+  tileBottom: string;
+  tileBorder: string;
+  billBack: string;
+  billFront: string;
+  billCoin: string;
+  walletTop: string;
+  walletBottom: string;
+  /** The hard shadow under the wallet. */
+  walletShadow: string;
+  walletShadowOpacity: number;
+  clasp: string;
+  /** The coin on the clasp. */
+  dot: string;
+  /** Soft glow / drop shadow around the tile at large sizes (box-shadow colour). */
+  glow: string;
+};
+
+export function logoColors(kind: 'light' | 'dark', key: string, coin: string): LogoColors {
+  if (kind === 'light') {
+    return {
+      tileTop: mix(key, '#FFFFFF', 0.94),
+      tileBottom: mix(key, '#FFFFFF', 0.8),
+      tileBorder: mix(key, '#FFFFFF', 0.7),
+      billBack: key,
+      billFront: mix(key, '#FFFFFF', 0.42),
+      billCoin: mix(key, '#FFFFFF', 0.12),
+      walletTop: '#FFFFFF',
+      walletBottom: mix(key, '#FFFFFF', 0.92),
+      walletShadow: mix(key, '#FFFFFF', 0.55),
+      walletShadowOpacity: 1,
+      clasp: key,
+      dot: coin,
+      glow: rgba(key, 0.28),
+    };
+  }
+  return {
+    tileTop: '#1E1F22',
+    tileBottom: '#0C0C0E',
+    tileBorder: mix(key, '#0A0A0B', 0.55),
+    billBack: mix(key, '#0A0A0B', 0.35),
+    billFront: key,
+    billCoin: mix(key, '#0A0A0B', 0.55),
+    walletTop: mix(key, '#FFFFFF', 0.62),
+    walletBottom: mix(key, '#FFFFFF', 0.28),
+    walletShadow: '#000000',
+    walletShadowOpacity: 0.35,
+    clasp: mix(key, '#0A0A0B', 0.82),
+    dot: coin,
+    glow: rgba(key, 0.4),
+  };
+}
 
 /** Adds transparency to a #RRGGBB colour. */
 export function alpha(hex: string, a: number): string {
@@ -241,9 +313,7 @@ export function midnightPalette(id: MidnightId): Palette {
     heroTile: 'rgba(10,10,11,0.08)',
     fab: m.bright,
     onFab: '#0A0A0B',
-    logoTile: surfaceAlt,
-    logoStem: '#F4F4F5',
-    logoArrow: m.bright,
+    logo: logoColors('dark', m.bright, '#FFC93C'),
     // On near-black a dark drop shadow barely shows, so cards lean on their border;
     // the hero and the + button get a soft glow in their own colour instead.
     shadowCard: '0px 10px 28px rgba(0,0,0,0.45)',
@@ -307,9 +377,7 @@ export function electricPalette(id: ElectricId): Palette {
     heroTile: 'rgba(255,255,255,0.14)',
     fab: e.primary,
     onFab: '#FFFFFF',
-    logoTile: e.primary,
-    logoStem: '#FFFFFF',
-    logoArrow: e.highlight,
+    logo: logoColors('light', e.primary, e.highlight),
     shadowCard: `0px 10px 28px ${rgba(e.primary, 0.09)}`,
     shadowHero: `0px 20px 40px -14px ${rgba(e.primary, 0.55)}`,
     shadowRaised: `0px 10px 22px ${rgba(e.primary, 0.35)}`,

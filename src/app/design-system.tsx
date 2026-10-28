@@ -225,10 +225,10 @@ export default function DesignSystem() {
           One tone sets every colour. Warn and danger get a tinted card; the rest sit on a normal card. The pill says what to do or how urgent.
         </Txt>
         <NoticeRow compact tone="info" icon="flask-outline" title="Sample data" body="Not real, not saved" pill="Use my SMS" onPress={() => {}} />
-        <NoticeRow tone="neutral" icon="credit-card-clock-outline" title="₹21,130 to pay on 2 cards" body="HDFC ••7788 · due 5 Nov" pill="8 days" onPress={() => {}} />
+        <NoticeRow tone="neutral" icon="credit-card-clock-outline" title="₹21,130 due on 2 cards" body="HDFC ••7788 · due 5 Nov" pill="8 days" onPress={() => {}} />
         <NoticeRow tone="accent" icon="target" title="Set a monthly budget" body="See how much is left each day." pill="Set" onPress={() => {}} />
         <NoticeRow tone="warn" icon="help-circle-outline" title="3 payments need a look" body="Pick a category so your totals are right." pill="Review" onPress={() => {}} />
-        <NoticeRow tone="danger" icon="credit-card-clock-outline" title="₹16,764 to pay on 1 card" body="HDFC ••7788 · 2 days late" pill="Late" onPress={() => {}} />
+        <NoticeRow tone="danger" icon="credit-card-clock-outline" title="₹16,764 due on 1 card" body="HDFC ••7788 · 2 days late" pill="Late" onPress={() => {}} />
         <NoticeRow tone="warn" icon="help-circle-outline" title="We weren't sure what this was" body="No pill and no tap: a plain message inside a screen." />
       </View>
 
@@ -242,10 +242,15 @@ export default function DesignSystem() {
       </View>
 
       <View>
-        <SectionHeader title="Logo" />
-        <Card style={[styles.row, { alignItems: 'center', justifyContent: 'space-between' }]}>
+        <SectionHeader title="Logo" subtitle="Wallet, two bills, and a coin on the clasp. Follows your colour." />
+        <Card style={{ gap: space.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingVertical: space.sm }}>
+            <LogoTile size={96} />
+            <LogoTile size={56} />
+            <LogoTile size={32} />
+            <LogoTile size={24} />
+          </View>
           <Wordmark size={32} />
-          <LogoTile size={56} />
         </Card>
       </View>
     </ScrollView>

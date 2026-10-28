@@ -177,9 +177,14 @@ A small outlined label for how something was paid: `UPI`, `HDFC card ••7788`
 Five slots: Home · Activity · **+** · Insights · Accounts. The + uses `fab` / `onFab` / `shadowRaised`. The active tab uses `accentInk`, the rest use `muted`.
 
 ### Logo
-A white ledger line + an arrow in `logoArrow`, on a `logoTile`. Midnight: bright arrow on a dark tile. Electric: highlight arrow on a primary tile.
+A wallet with two bills tucked in and a coin on the clasp. Shapes: `src/lib/logo.ts` (1024 grid). Colours: `palette.logo`, worked out from the family colour, so the logo follows your pick.
 
----
+- **Light (Electric):** pale tinted tile, bills in the primary colour, white wallet, yellow coin, soft coloured drop shadow.
+- **Dark (Midnight):** near-black tile with a thin border in the bright colour, bills and wallet in that colour, yellow coin, soft glow.
+- `LogoTile` adds the shadow/glow only from 48px up; below that it stays flat so it is crisp in the header.
+- `Wordmark` = tile + "Kharcha" in Sora Bold + a dot in the accent colour (the coin, echoed).
+- App icon files (launcher, Android adaptive + themed one-colour icon, splash, favicon) are generated from the same shapes: run `npx tsx scripts/make-icons.ts` (writes `assets/brand/*.svg`), then render them to PNG at 1024 px. The launcher uses Electric Blue.
+- Rules: don't add text or extra shapes inside the tile; keep at least 25% of the tile's size as space around it; never recolour it by hand, use the palette.
 
 ## Money and currencies
 
