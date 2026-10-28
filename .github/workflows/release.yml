@@ -1,0 +1,40 @@
+# Release: push a tag like v1.0.1 (it must match app.json "version").
+# Builds the Android app bundle on EAS and sends it to Google Play's internal testing track.
+# Needs one GitHub secret: EXPO_TOKEN. The Google Play service account key lives on EAS
+# (set once with `eas credentials`), so it never touches GitHub. See docs/RELEASING.md.
+name: Release (Android)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck, lint, tests
+        run: |
+          npx tsc --noEmit
+          npx expo lint
+          npm test
+      - name: Build number rule
+        run: npx tsx scripts/check-version.ts "${{ github.ref_type == 'tag' && github.ref_name || '' }}"
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build on EAS and submit to Play (internal track)
+        run: eas build --platform android --profile production --non-interactive --auto-submit --no-wait

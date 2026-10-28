@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HeroCard } from '../components/HeroCard';
 import { Wordmark } from '../components/Logo';
 import { enterUp } from '../components/motion';
+import { useAskForSms } from '../components/SmsConsent';
 import { SettingsSteps, smsCopy } from '../components/SmsNotice';
 import { Badge, Button, Icon, Txt } from '../components/ui';
 import { SAMPLE_DATA_ENABLED } from '../lib/demo';
@@ -78,7 +79,8 @@ export default function Welcome() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
-  const { permission, requestAccess, chooseSource, status, currency } = useStore();
+  const { permission, chooseSource, status, currency } = useStore();
+  const askForSms = useAskForSms();
   const [asking, setAsking] = useState(false);
   const [footerH, setFooterH] = useState(180);
 
@@ -99,7 +101,7 @@ export default function Welcome() {
 
   const onAllow = async () => {
     setAsking(true);
-    await requestAccess();
+    await askForSms();
     setAsking(false);
   };
 

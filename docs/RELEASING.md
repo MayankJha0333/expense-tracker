@@ -1,5 +1,29 @@
 # Releasing Kharcha
 
+## CI/CD at a glance
+
+- **Every push to `main` and every pull request** (`.github/workflows/ci.yml`): typecheck, lint, tests, and the build-number check.
+- **Every tag `v*`** (`.github/workflows/release.yml`): the same checks, then an EAS production build (Android App Bundle) that is sent to Google Play's **internal testing** track as a draft release.
+
+### One-time setup
+
+1. **Expo token:** expo.dev → Account settings → Access tokens → create one. Add it on GitHub as the repository secret `EXPO_TOKEN` (Settings → Secrets and variables → Actions).
+2. **Google Play service account:** Play Console → Users and permissions → invite a Google Cloud service account with release rights, and download its JSON key. Then run `eas credentials` → Android → production → Google Service Account → upload the JSON. The key stays on EAS, never in GitHub or the repo.
+3. **First upload by hand:** Google's API can't create the first release of a new app. Build once (`eas build -p android --profile production`), download the `.aab`, and upload it yourself in Play Console → Testing → Internal testing. After that, the workflow takes over.
+4. When the app is out of draft (it has been released on any track), change `"releaseStatus": "draft"` to `"completed"` in `eas.json`, or keep promoting releases by hand in Play Console.
+
+### Shipping a release
+
+```
+# 1. bump "version" and "android.versionCode" in app.json (rules below)
+npm run check:version
+git commit -am "Release 1.0.1"
+git tag v1.0.1
+git push && git push --tags
+```
+
+The release workflow stops if the tag doesn't match `version`, or if `versionCode` is in the wrong thousand.
+
 ## Build numbers (read this before every Play upload)
 
 Android's build number (`versionCode` in `app.json`) carries the major version:

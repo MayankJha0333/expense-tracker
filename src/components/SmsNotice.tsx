@@ -2,6 +2,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 
 import { openAppSettings, sideloadRestricted, type SmsPermission } from '../lib/sms';
 import { useStore } from '../lib/store';
+import { useAskForSms } from './SmsConsent';
 import { noticeColors, radius, space, usePalette } from '../theme';
 import { Button, Icon, Txt } from './ui';
 
@@ -62,7 +63,8 @@ export function smsCopy(permission: SmsPermission): { title: string; body: strin
 /** Shown on Home when transactions could come from SMS but can't right now. */
 export function SmsNotice() {
   const p = usePalette();
-  const { permission, source, requestAccess } = useStore();
+  const { permission, source } = useStore();
+  const askForSms = useAskForSms();
   if (permission === 'granted' || source === 'demo') return null;
   // Manual mode in a build without the reader: nothing useful to offer.
   if (source === 'manual' && permission === 'unavailable') return null;
@@ -93,7 +95,7 @@ export function SmsNotice() {
             compact
             label={needsSettings ? 'Open App info' : 'Turn on'}
             icon={needsSettings ? 'cog-outline' : 'message-text-outline'}
-            onPress={needsSettings ? openAppSettings : requestAccess}
+            onPress={needsSettings ? openAppSettings : askForSms}
           />
         </View>
       ) : null}

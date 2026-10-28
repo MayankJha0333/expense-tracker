@@ -6,6 +6,7 @@ import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '../components/ScreenHeader';
+import { useAskForSms } from '../components/SmsConsent';
 import { SmsNotice } from '../components/SmsNotice';
 import { Button, Card, Chip, Divider, Icon, ListRow, SectionHeader, Segmented, Tag, Txt } from '../components/ui';
 import { PressScale, Stagger } from '../components/motion';
@@ -39,7 +40,8 @@ const BY_DESIGN: { icon: IconName; text: string }[] = [
 export default function Settings() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const { source, permission, requestAccess, chooseSource, eraseAll, goals, budget, txns } = useStore();
+  const { source, permission, chooseSource, eraseAll, goals, budget, txns } = useStore();
+  const askForSms = useAskForSms();
   const install = installInfo();
 
   const manualCount = txns.filter((t) => t.isManual).length;
@@ -122,7 +124,7 @@ export default function Settings() {
               <Txt variant="small" color={p.muted}>
                 Sample data is made up and kept only in memory. Your own entries are kept separately and come back when you switch.
               </Txt>
-              {smsSupported ? <Button label="Use my bank SMS" icon="message-text-outline" onPress={requestAccess} /> : null}
+              {smsSupported ? <Button label="Use my bank SMS" icon="message-text-outline" onPress={askForSms} /> : null}
               <Button label="Add entries by hand" kind="secondary" icon="pencil-outline" onPress={() => chooseSource('manual')} />
             </>
           ) : (

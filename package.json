@@ -45,6 +45,7 @@
     "test:currency": "npx tsx scripts/test-currency.ts",
     "test": "npx tsx scripts/test-parser.ts && npx tsx scripts/test-tracking.ts && npx tsx scripts/test-currency.ts && npx tsx scripts/test-update.ts",
     "test:update": "npx tsx scripts/test-update.ts",
+    "check:version": "npx tsx scripts/check-version.ts",
     "lint": "expo lint",
     "web": "expo start --web",
     "privacy:md": "npx tsx scripts/privacy-md.ts"

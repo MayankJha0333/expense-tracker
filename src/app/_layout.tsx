@@ -8,6 +8,7 @@ import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { currencyLayout } from '../components/CurrencyScope';
+import { SmsConsentProvider } from '../components/SmsConsent';
 import { UpdateGate } from '../components/UpdateGate';
 import { StoreProvider } from '../lib/store';
 import { ThemeProvider, usePalette, useTheme } from '../theme';
@@ -40,6 +41,7 @@ function AppShell() {
   return (
     <SafeAreaProvider>
       <StoreProvider>
+        <SmsConsentProvider>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         <Stack
           screenLayout={currencyLayout}
@@ -66,6 +68,7 @@ function AppShell() {
         </Stack>
         {/* Covers everything when the Play Store has a new major version. */}
         <UpdateGate />
+        </SmsConsentProvider>
       </StoreProvider>
     </SafeAreaProvider>
   );
