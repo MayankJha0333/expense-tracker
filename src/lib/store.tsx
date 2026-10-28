@@ -60,8 +60,6 @@ const LEGACY_KEY = 'kharcha:prefs:v1';
 const CURRENCY_KEY = 'kharcha:currency:v1';
 const SAMPLE_KEY = 'kharcha:sample:v1';
 const AUTO_REFRESH_GAP_MS = 60_000;
-/** `EXPO_PUBLIC_DEMO=1 npx expo start` opens straight into sample data (development builds only). */
-const FORCE_DEMO = SAMPLE_DATA_ENABLED && process.env.EXPO_PUBLIC_DEMO === '1';
 
 export type Status = 'booting' | 'onboarding' | 'loading' | 'ready';
 
@@ -264,7 +262,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // Keep the defaults.
       }
 
-      if (FORCE_DEMO || loaded.source === 'demo') {
+      if (loaded.source === 'demo') {
         startDemo();
         return;
       }

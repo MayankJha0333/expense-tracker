@@ -43,7 +43,6 @@
     "test:currency": "npx tsx scripts/test-currency.ts",
     "test": "npx tsx scripts/test-parser.ts && npx tsx scripts/test-tracking.ts && npx tsx scripts/test-currency.ts",
     "lint": "expo lint",
-    "demo:web": "EXPO_PUBLIC_DEMO=1 expo start --web",
     "web": "expo start --web",
     "privacy:md": "npx tsx scripts/privacy-md.ts"
   },

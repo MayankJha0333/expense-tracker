@@ -11,6 +11,7 @@ import { Button, Card, Chip, Divider, Icon, ListRow, SectionHeader, Segmented, T
 import { PressScale, Stagger } from '../components/motion';
 import { CURRENCIES, CURRENCY_CODES } from '../lib/currency';
 import { SAMPLE_DATA_ENABLED, type SampleKind } from '../lib/demo';
+import { DESIGN_SYSTEM_ENABLED } from '../lib/devTools';
 import { installInfo, smsSupported } from '../lib/sms';
 import { useStore } from '../lib/store';
 import type { IconName } from '../lib/types';
@@ -162,7 +163,7 @@ export default function Settings() {
         <Card padded={false} style={{ paddingHorizontal: space.lg }}>
           <ListRow icon="file-document-outline" title="Privacy policy" subtitle="What Kharcha reads, keeps and never does" href="/privacy" />
           <Divider inset={48} />
-          {__DEV__ ? (
+          {DESIGN_SYSTEM_ENABLED ? (
             <>
               <ListRow icon="palette-swatch-outline" title="Design system" subtitle="Every colour, font and component, in all 8 themes" href="/design-system" />
               <Divider inset={48} />

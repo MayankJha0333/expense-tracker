@@ -30,10 +30,9 @@ Steps:
 
 ### See it with sample data
 
-- **In the browser:** `npm run demo:web`
-- **On the phone, without real SMS:** `EXPO_PUBLIC_DEMO=1 npx expo start`, then open the dev build.
+Turned off for now in every build. To bring it back for development builds, set `SAMPLE_DATA_ENABLED` in `src/lib/demo.ts` (the comment there shows how); then tap **Explore with sample data** on the welcome screen or in Settings.
 
-Demo mode runs about 120 sample bank messages through the real SMS reader, including fake OTPs and offers that get thrown away.
+Sample data runs about 120 sample bank messages through the real SMS reader, including fake OTPs and offers that get thrown away.
 
 ---
 

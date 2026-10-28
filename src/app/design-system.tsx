@@ -10,6 +10,7 @@ import { LogoTile, Wordmark } from '../components/Logo';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { AmountBar, Button, Card, Chip, Icon, MixBar, NoticeRow, PayBadge, SectionHeader, Segmented, Tag, Txt } from '../components/ui';
 import { thisMonth } from '../lib/analytics';
+import { DESIGN_SYSTEM_ENABLED } from '../lib/devTools';
 import type { Txn } from '../lib/types';
 import { ELECTRIC, ELECTRIC_IDS, MIDNIGHT, MIDNIGHT_IDS, radius, space, type, usePalette, useTheme, type Palette, type ThemeMode, type TypeVariant } from '../theme';
 
@@ -17,7 +18,7 @@ import { ELECTRIC, ELECTRIC_IDS, MIDNIGHT, MIDNIGHT_IDS, radius, space, type, us
  * Kharcha design system, live. Every token and component in the current theme,
  * with a quick switcher for all 8 themes. Used for visual QA (docs/DESIGN_SYSTEM.md).
  * Open with kharcha://design-system, or Settings › About › Design system.
- * Development builds only: release builds hide the link and send this route back to Home.
+ * Shown only when DESIGN_SYSTEM_ENABLED (src/lib/devTools.ts) is on; otherwise the link is hidden and this route goes to Home.
  */
 
 const SAMPLE: Txn[] = [
@@ -271,8 +272,8 @@ const styles = StyleSheet.create({
   elev: { flex: 1, height: 72, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
 });
 
-/** Release builds never show the design system, even if someone opens kharcha://design-system. */
+/** When the design system is turned off it never shows, even if someone opens kharcha://design-system. */
 export default function DesignSystemRoute() {
-  if (!__DEV__) return <Redirect href="/" />;
+  if (!DESIGN_SYSTEM_ENABLED) return <Redirect href="/" />;
   return <DesignSystem />;
 }
