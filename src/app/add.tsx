@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,6 +39,8 @@ export default function AddEntry() {
   const [picked, setPicked] = useState(false);
   const [daysBack, setDaysBack] = useState(0);
   const [mode, setMode] = useState<PayMode>('cash');
+  // A fast double tap must not save the same entry twice while the screen closes.
+  const saved = useRef(false);
 
   const amount = parseFloat(amountText.replace(/,/g, ''));
   const valid = Number.isFinite(amount) && amount > 0;
@@ -61,12 +63,14 @@ export default function AddEntry() {
   };
 
   const save = () => {
-    if (!valid) return;
+    if (!valid || saved.current) return;
+    saved.current = true;
     const when = new Date();
     when.setDate(when.getDate() - daysBack);
     addEntry({ type: kind, amount, merchant: what, category, timestamp: when.getTime(), mode });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    router.back();
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
   };
 
   return (

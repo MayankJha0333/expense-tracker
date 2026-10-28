@@ -1,3 +1,4 @@
+/// <reference types="node" />
 /* Run: npx tsx scripts/design-system-md.ts — rewrites the colour tables in docs/DESIGN_SYSTEM.md from src/lib/palette.ts. */
 import { readFileSync, writeFileSync } from 'node:fs';
 

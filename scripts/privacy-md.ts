@@ -1,3 +1,4 @@
+/// <reference types="node" />
 /* Writes PRIVACY.md from src/lib/policy.ts, so the store copy matches the in-app one. Run: npm run privacy:md */
 import { writeFileSync } from 'fs';
 import { join } from 'path';
