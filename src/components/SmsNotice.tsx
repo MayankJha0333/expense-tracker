@@ -2,7 +2,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 
 import { openAppSettings, sideloadRestricted, type SmsPermission } from '../lib/sms';
 import { useStore } from '../lib/store';
-import { radius, space, usePalette } from '../theme';
+import { noticeColors, radius, space, usePalette } from '../theme';
 import { Button, Icon, Txt } from './ui';
 
 /** Numbered steps for turning SMS access back on in Android Settings. */
@@ -71,10 +71,14 @@ export function SmsNotice() {
   const { title, body } = smsCopy(restricted ? 'restricted' : permission);
   const needsSettings = permission === 'blocked' || permission === 'restricted';
 
+  // Same look as an "info" notice row, with room for steps and a button.
+  const c = noticeColors(p, needsSettings ? 'warn' : 'info');
   return (
-    <View style={[styles.box, { backgroundColor: p.accentSoft }]}>
+    <View style={[styles.box, { backgroundColor: c.cardBg, borderColor: c.border }, c.shadow ? { boxShadow: c.shadow } : null]}>
       <View style={styles.head}>
-        <Icon name="message-processing-outline" size={20} color={p.accentInk} />
+        <View style={[styles.tile, { backgroundColor: c.tileBg }]}>
+          <Icon name="message-processing-outline" size={22} color={c.tileFg} />
+        </View>
         <Txt variant="bodyStrong" style={{ flex: 1 }}>
           {title}
         </Txt>
@@ -98,8 +102,9 @@ export function SmsNotice() {
 }
 
 const styles = StyleSheet.create({
-  box: { borderRadius: radius.md, padding: space.lg, gap: space.sm },
-  head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  box: { borderRadius: radius.md + 4, borderWidth: 1, padding: space.md + 2, gap: space.md },
+  head: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  tile: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   step: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start' },
   num: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
 });

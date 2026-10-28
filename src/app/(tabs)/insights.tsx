@@ -343,12 +343,11 @@ function Income({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] })
 
           {toCheck.length > 0 ? (
             <NoticeRow
-              badgeText={String(toCheck.length)}
-              iconBg={p.warn}
-              iconColor={p.onWarn}
+              tone="warn"
+              icon="account-question-outline"
               title={`${toCheck.length} ${toCheck.length === 1 ? 'payment' : 'payments'} from people to check`}
               body="If a friend paid you back, it isn't really income. Mark it as left out."
-              tone={{ bg: p.warnSoft, border: p.warn }}
+              pill="Check"
               onPress={() => router.navigate({ pathname: '/activity', params: { filter: 'review' } })}
             />
           ) : null}
@@ -497,11 +496,11 @@ function Savings({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] }
       ) : null}
 
       <NoticeRow
+        tone="accent"
         icon="target"
-        iconBg={p.accentSoft}
-        iconColor={p.accentInk}
         title={budget ? `Budget: ${inr(budget)} a month` : 'Set a monthly budget'}
-        body={budget ? 'Tap to change it.' : 'See how much is left each day.'}
+        body={budget ? 'Your spending limit for each month.' : 'See how much is left each day.'}
+        pill={budget ? 'Change' : 'Set'}
         onPress={() => router.push('/budget')}
       />
 

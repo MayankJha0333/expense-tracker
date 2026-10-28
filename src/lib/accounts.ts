@@ -348,3 +348,8 @@ export function payLabel(t: Txn): string {
       return bankShort ? `${bankShort}${dots}` : cat(t.category).label;
   }
 }
+
+/** "HDFC Bank credit card ••7788" → "HDFC ••7788", so a bill row fits on one line. */
+export function shortCardName(name: string): string {
+  return name.replace(/\s*(bank\s+)?credit\s+card\s*/i, ' ').replace(/\s+/g, ' ').trim();
+}

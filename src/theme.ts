@@ -16,8 +16,8 @@ import {
   type ThemeMode,
 } from './lib/palette';
 
-export { alpha, buildPalette, ELECTRIC, ELECTRIC_IDS, MIDNIGHT, MIDNIGHT_IDS, rgba } from './lib/palette';
-export type { ElectricId, MidnightId, Palette, Scheme, ThemeMode } from './lib/palette';
+export { alpha, buildPalette, ELECTRIC, ELECTRIC_IDS, MIDNIGHT, MIDNIGHT_IDS, NOTICE_TONES, noticeColors, rgba } from './lib/palette';
+export type { ElectricId, MidnightId, NoticeTone, Palette, Scheme, ThemeMode } from './lib/palette';
 
 /* Theme: fonts, sizes, and the saved accent + light/dark choice. Colours live in lib/palette.ts. */
 

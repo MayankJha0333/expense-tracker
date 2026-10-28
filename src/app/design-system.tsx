@@ -221,9 +221,15 @@ export default function DesignSystem() {
 
       <View style={{ gap: space.md }}>
         <SectionHeader title="Notices" />
-        <NoticeRow icon="credit-card-clock-outline" iconBg={p.series[1]} iconColor={p.onSeries} title="₹21,130 to pay on 2 credit cards" body="Next due 5 Nov · 8 days left" onPress={() => {}} />
-        <NoticeRow badgeText="3" iconBg={p.warn} iconColor={p.onWarn} title="3 payments need a look" body="Pick a category to fix the totals." tone={{ bg: p.warnSoft, border: p.warn }} onPress={() => {}} />
-        <NoticeRow icon="alert-circle-outline" iconBg={p.danger} iconColor={p.onDanger} title="HDFC card is 2 days late" tone={{ bg: p.dangerSoft, border: p.danger }} />
+        <Txt variant="small" color={p.muted}>
+          One tone sets every colour. Warn and danger get a tinted card; the rest sit on a normal card. The pill says what to do or how urgent.
+        </Txt>
+        <NoticeRow compact tone="info" icon="flask-outline" title="Sample data" body="Not real, not saved" pill="Use my SMS" onPress={() => {}} />
+        <NoticeRow tone="neutral" icon="credit-card-clock-outline" title="₹21,130 to pay on 2 cards" body="HDFC ••7788 · due 5 Nov" pill="8 days" onPress={() => {}} />
+        <NoticeRow tone="accent" icon="target" title="Set a monthly budget" body="See how much is left each day." pill="Set" onPress={() => {}} />
+        <NoticeRow tone="warn" icon="help-circle-outline" title="3 payments need a look" body="Pick a category so your totals are right." pill="Review" onPress={() => {}} />
+        <NoticeRow tone="danger" icon="credit-card-clock-outline" title="₹16,764 to pay on 1 card" body="HDFC ••7788 · 2 days late" pill="Late" onPress={() => {}} />
+        <NoticeRow tone="warn" icon="help-circle-outline" title="We weren't sure what this was" body="No pill and no tap: a plain message inside a screen." />
       </View>
 
       <View>

@@ -9,11 +9,12 @@ import {
   notCountedIncome,
   payLabel,
   payMix,
+  shortCardName,
 } from '../src/lib/accounts';
 import { monthOf, summarize } from '../src/lib/analytics';
 import { categorize } from '../src/lib/categorize';
 import { demoExtras, demoInbox } from '../src/lib/demo';
-import { ELECTRIC_IDS, electricPalette, MIDNIGHT_IDS, midnightPalette, parseSavedTheme, type Palette } from '../src/lib/palette';
+import { ELECTRIC_IDS, electricPalette, MIDNIGHT_IDS, midnightPalette, NOTICE_TONES, noticeColors, parseSavedTheme, type Palette } from '../src/lib/palette';
 import { parseCardBill, parseSms } from '../src/lib/parser';
 import { processInbox } from '../src/lib/pipeline';
 import type { CardBill, Txn } from '../src/lib/types';
@@ -259,10 +260,36 @@ for (const p of palettes) {
   check(`${p.familyName} (${p.scheme}) is readable`, bad.length === 0, bad.join('; '));
   check(`${p.familyName} has shadows for cards, hero and + button`, [p.shadowCard, p.shadowHero, p.shadowRaised].every((x) => /^0px \d+px \d+px/.test(x) && /rgba\(/.test(x)));
 }
+
+/* ---------- 7. Notices: every tone readable in every theme ---------- */
+console.log('\n# Notices');
+for (const p of palettes) {
+  const bad: string[] = [];
+  for (const tone of NOTICE_TONES) {
+    const c = noticeColors(p, tone);
+    // The card may be see-through over the page; tile and pill sit on that card.
+    const card = '#' + over(c.cardBg, p.bg).map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+    const rows: [string, string, string, number][] = [
+      ['title', p.ink, card, 7],
+      ['grey line', p.muted, card, 4.5],
+      ['icon on tile', c.tileFg, c.tileBg, 3],
+      ['pill text', c.pillFg, c.pillBg, 4.5],
+    ];
+    for (const [what, fg, bg, min] of rows) {
+      const r = cr(fg, bg, card);
+      if (r < min) bad.push(`${tone} ${what} ${r.toFixed(2)}`);
+    }
+    if (c.tinted !== (tone === 'warn' || tone === 'danger')) bad.push(`${tone} tint`);
+    if (!c.tinted && !c.shadow) bad.push(`${tone} has no shadow`);
+  }
+  check(`${p.familyName}: all 5 notice tones are readable`, bad.length === 0, bad.join('; '));
+}
 check('saved theme falls back safely on bad data', JSON.stringify(parseSavedTheme('{"mode":"weird","midnight":"neon","electric":"x"}')) === '{"mode":"system","midnight":"lime","electric":"blue"}');
 check('saved theme falls back on broken JSON', parseSavedTheme('not json').mode === 'system');
 check('saved theme is read back', JSON.stringify(parseSavedTheme('{"mode":"light","midnight":"aqua","electric":"emerald"}')) === '{"mode":"light","midnight":"aqua","electric":"emerald"}');
 check('old one-colour setting is upgraded (accent → Midnight colour)', JSON.stringify(parseSavedTheme(null, '{"accent":"mango","mode":"dark"}')) === '{"mode":"dark","midnight":"mango","electric":"blue"}');
+
+check('card name is shortened for the bill row', shortCardName('HDFC Bank credit card ••7788') === 'HDFC ••7788' && shortCardName('SBI Card credit card ••1234') === 'SBI Card ••1234' && shortCardName('OneCard ••5555') === 'OneCard ••5555', shortCardName('HDFC Bank credit card ••7788'));
 
 console.log(`\n${pass} / ${pass + fail} passed`);
 if (fail > 0) process.exit(1);

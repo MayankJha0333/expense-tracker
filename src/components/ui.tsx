@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
 
 import type { IconName } from '../lib/types';
-import { alpha, fonts, radius, space, type, usePalette, type TypeVariant } from '../theme';
+import { alpha, fonts, noticeColors, radius, space, type, usePalette, type NoticeTone, type TypeVariant } from '../theme';
 
 /** Text with the app's type scale and colours. */
 export function Txt({
@@ -405,57 +405,65 @@ export function MixBar({ parts, height = 16, label }: { parts: { share: number; 
 
 /** A row you tap to go somewhere: icon, two lines of text, chevron. Used for alerts on Home. */
 export function NoticeRow({
+  tone = 'neutral',
   icon,
-  iconBg,
-  iconColor,
   title,
   body,
+  pill,
   onPress,
-  tone,
-  badgeText,
+  compact,
 }: {
-  icon?: IconName;
-  iconBg: string;
-  iconColor: string;
+  /** Decides every colour in the row. See `noticeColors` in lib/palette.ts. */
+  tone?: NoticeTone;
+  icon: IconName;
   title: string;
   body?: string;
+  /** A short label on the right: what to do ("Review") or how urgent ("8 days"). */
+  pill?: string;
   onPress?: () => void;
-  tone?: { bg: string; border: string };
-  badgeText?: string;
+  /** Slim version for app status (sample data) so it doesn't fight the hero card. */
+  compact?: boolean;
 }) {
   const p = usePalette();
+  const c = noticeColors(p, tone);
+  const tile = compact ? 34 : 44;
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${title}${body ? `. ${body}` : ''}`}
+      accessibilityLabel={[title, body, pill].filter(Boolean).map((t) => String(t).replace(/[.\s]+$/, '')).join('. ')}
       style={({ pressed }) => [
         styles.notice,
-        { backgroundColor: tone?.bg ?? p.surface, borderColor: tone?.border ?? p.line, opacity: pressed ? 0.75 : 1 },
-        !tone && { boxShadow: p.shadowCard },
+        compact && styles.noticeCompact,
+        { backgroundColor: c.cardBg, borderColor: c.border },
+        c.shadow ? { boxShadow: c.shadow } : null,
+        pressed && { opacity: 0.85, transform: [{ scale: 0.985 }] },
       ]}
     >
-      <View style={[styles.noticeIcon, { backgroundColor: iconBg }]}>
-        {badgeText ? (
-          <Txt variant="bodyStrong" color={iconColor}>
-            {badgeText}
-          </Txt>
-        ) : icon ? (
-          <MaterialCommunityIcons name={icon} size={20} color={iconColor} />
-        ) : null}
+      <View style={[styles.noticeIcon, { width: tile, height: tile, borderRadius: compact ? 11 : 14, backgroundColor: c.tileBg }]}>
+        <MaterialCommunityIcons name={icon} size={compact ? 18 : 22} color={c.tileFg} />
       </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Txt variant="bodyStrong" numberOfLines={2}>
+      <View style={{ flex: 1, gap: compact ? 0 : 2 }}>
+        <Txt variant={compact ? 'smallStrong' : 'bodyStrong'} numberOfLines={compact ? 1 : 2}>
           {title}
         </Txt>
         {body ? (
-          <Txt variant="small" color={p.muted} numberOfLines={2}>
+          <Txt variant="small" color={p.muted} numberOfLines={compact ? 1 : 2}>
             {body}
           </Txt>
         ) : null}
       </View>
-      {onPress ? <Icon name="chevron-right" size={20} color={p.muted} /> : null}
+      {pill ? (
+        <View style={[styles.noticePill, { backgroundColor: c.pillBg }]}>
+          <Txt variant="smallStrong" color={c.pillFg} numberOfLines={1}>
+            {pill}
+          </Txt>
+          {onPress ? <MaterialCommunityIcons name="chevron-right" size={16} color={c.pillFg} style={{ marginRight: -4 }} /> : null}
+        </View>
+      ) : onPress ? (
+        <Icon name="chevron-right" size={20} color={p.muted} />
+      ) : null}
     </Pressable>
   );
 }
@@ -526,9 +534,13 @@ export const styles = StyleSheet.create({
     gap: space.md,
     borderRadius: radius.md + 4,
     borderWidth: 1,
-    padding: space.md + 2,
+    paddingVertical: space.md + 2,
+    paddingLeft: space.md + 2,
+    paddingRight: space.md,
   },
-  noticeIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  noticeCompact: { paddingVertical: space.sm + 2, paddingLeft: space.sm + 2, gap: space.sm + 2 },
+  noticeIcon: { alignItems: 'center', justifyContent: 'center' },
+  noticePill: { flexDirection: 'row', alignItems: 'center', gap: 2, height: 30, paddingHorizontal: space.md, borderRadius: radius.pill, flexShrink: 0 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md, minHeight: 56 },
   empty: { alignItems: 'center', gap: space.sm, paddingVertical: space.xxl, paddingHorizontal: space.xl },
   emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: space.xs },

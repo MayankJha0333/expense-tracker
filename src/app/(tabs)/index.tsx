@@ -9,7 +9,7 @@ import { SmsNotice } from '../../components/SmsNotice';
 import { Ring } from '../../components/charts';
 import { HeroCard } from '../../components/HeroCard';
 import { AmountBar, Button, Card, Empty, Icon, IconButton, MixBar, NoticeRow, SectionHeader, Txt } from '../../components/ui';
-import { cardDues, duesSummary, needsReview, PAY_GROUP_LABEL, payGroupColorIndex, payMix } from '../../lib/accounts';
+import { cardDues, duesSummary, needsReview, PAY_GROUP_LABEL, payGroupColorIndex, payMix, shortCardName } from '../../lib/accounts';
 import { budgetPace, monthKey, monthName, monthShort, sameMonth, summarize, thisMonth } from '../../lib/analytics';
 import { inr, percent } from '../../lib/money';
 import { useStore } from '../../lib/store';
@@ -63,11 +63,12 @@ export default function Home() {
 
         {source === 'demo' ? (
           <NoticeRow
+            compact
+            tone="info"
             icon="flask-outline"
-            iconBg={p.savingsSoft}
-            iconColor={p.savings}
-            title="You are looking at sample data"
-            body="Nothing here is real or saved. Switch to your own bank SMS in Settings."
+            title="Sample data"
+            body="Not real, not saved"
+            pill="Use my SMS"
             onPress={() => router.push('/settings')}
           />
         ) : (
@@ -113,18 +114,25 @@ export default function Home() {
         {/* 2. Credit card bills still to pay */}
         {next ? (
           <NoticeRow
+            tone={lateDays ? 'danger' : dueSoon ? 'warn' : 'neutral'}
             icon="credit-card-clock-outline"
-            iconBg={lateDays ? p.danger : p.series[1]}
-            iconColor={lateDays ? p.onDanger : p.onSeries}
-            title={`${inr(dues.total)} to pay on ${dues.open.length} credit ${dues.open.length === 1 ? 'card' : 'cards'}`}
+            title={`${inr(dues.total)} to pay on ${dues.open.length} ${dues.open.length === 1 ? 'card' : 'cards'}`}
             body={
               lateDays
-                ? `${next.name} is ${lateDays} ${lateDays === 1 ? 'day' : 'days'} late`
+                ? `${shortCardName(next.name)} · ${lateDays} ${lateDays === 1 ? 'day' : 'days'} late`
                 : next.bill.dueDate
-                  ? `Next due ${shortDate(next.bill.dueDate)}${next.daysLeft !== null ? ` · ${next.daysLeft === 0 ? 'today' : `${next.daysLeft} ${next.daysLeft === 1 ? 'day' : 'days'} left`}` : ''} · ${next.name}`
-                  : next.name
+                  ? `${shortCardName(next.name)} · due ${shortDate(next.bill.dueDate)}`
+                  : shortCardName(next.name)
             }
-            tone={lateDays ? { bg: p.dangerSoft, border: p.danger } : dueSoon ? { bg: p.warnSoft, border: p.warn } : undefined}
+            pill={
+              lateDays
+                ? 'Late'
+                : next.daysLeft === null
+                  ? undefined
+                  : next.daysLeft === 0
+                    ? 'Due today'
+                    : `${next.daysLeft} ${next.daysLeft === 1 ? 'day' : 'days'}`
+            }
             onPress={() => router.push(`/account/${encodeURIComponent(next.key)}`)}
           />
         ) : null}
@@ -233,11 +241,11 @@ export default function Home() {
           </Pressable>
         ) : (
           <NoticeRow
+            tone="accent"
             icon="target"
-            iconBg={p.accentSoft}
-            iconColor={p.accentInk}
             title="Set a monthly budget"
             body="See how much is left each day."
+            pill="Set"
             onPress={() => router.push('/budget')}
           />
         )}
@@ -245,12 +253,11 @@ export default function Home() {
         {/* Payments to check */}
         {review.length > 0 ? (
           <NoticeRow
-            badgeText={String(review.length)}
-            iconBg={p.warn}
-            iconColor={p.onWarn}
+            tone="warn"
+            icon="help-circle-outline"
             title={`${review.length} ${review.length === 1 ? 'payment needs' : 'payments need'} a look`}
-            body="We weren't sure what these were. Pick a category to fix the totals."
-            tone={{ bg: p.warnSoft, border: p.warn }}
+            body="Pick a category so your totals are right."
+            pill="Review"
             onPress={() => router.navigate({ pathname: '/activity', params: { filter: 'review' } })}
           />
         ) : null}

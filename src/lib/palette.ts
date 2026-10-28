@@ -359,3 +359,63 @@ export function parseSavedTheme(raw: string | null, legacy: string | null = null
   }
   return DEFAULT_THEME;
 }
+
+/* ------------------------------------------------------------------ */
+/* Notices: the rows that tell you something (bills due, things to    */
+/* check, sample data). One tone decides every colour in the row.      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * - neutral: plain info (next card bill when nothing is urgent)
+ * - accent:  an invitation (set a budget)
+ * - info:    app status (sample data, SMS reading off)
+ * - warn:    needs you soon (payments to check, bill due in a few days)
+ * - danger:  something is late or wrong (bill overdue)
+ */
+export type NoticeTone = 'neutral' | 'accent' | 'info' | 'warn' | 'danger';
+export const NOTICE_TONES: NoticeTone[] = ['neutral', 'accent', 'info', 'warn', 'danger'];
+
+export type NoticeColors = {
+  /** warn and danger get a tinted card; the rest sit on a normal card with a shadow. */
+  tinted: boolean;
+  cardBg: string;
+  border: string;
+  shadow: string | undefined;
+  /** The square icon tile on the left. */
+  tileBg: string;
+  tileFg: string;
+  /** The small label pill on the right ("Review", "8 days"). */
+  pillBg: string;
+  pillFg: string;
+};
+
+export function noticeColors(p: Palette, tone: NoticeTone): NoticeColors {
+  if (tone === 'warn' || tone === 'danger') {
+    const c = tone === 'warn' ? p.warn : p.danger;
+    return {
+      tinted: true,
+      cardBg: tone === 'warn' ? p.warnSoft : p.dangerSoft,
+      border: alpha(c, p.scheme === 'dark' ? 0.32 : 0.26),
+      shadow: undefined,
+      tileBg: c,
+      tileFg: tone === 'warn' ? p.onWarn : p.onDanger,
+      pillBg: p.surface,
+      pillFg: c,
+    };
+  }
+  const tile =
+    tone === 'accent'
+      ? { tileBg: p.accentSoft, tileFg: p.accentInk }
+      : tone === 'info'
+        ? { tileBg: p.savingsSoft, tileFg: p.savings }
+        : { tileBg: p.surfaceAlt, tileFg: p.ink };
+  return {
+    tinted: false,
+    cardBg: p.surface,
+    border: p.line,
+    shadow: p.shadowCard,
+    ...tile,
+    pillBg: tone === 'neutral' ? p.surfaceAlt : tile.tileBg,
+    pillFg: tone === 'neutral' ? p.ink : tile.tileFg,
+  };
+}

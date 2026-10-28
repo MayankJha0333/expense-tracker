@@ -142,7 +142,22 @@ Only **one** hero per screen.
 `surface` fill, hairline `line` border, `shadowCard`, 20 corners, 16 padding.
 
 ### NoticeRow
-An icon tile + title + one line + chevron, for things to act on: card bills, payments to check, setting a budget. With `tone` (warn or danger) it gets a tinted background and border, and no shadow.
+A row that tells you something: icon tile, title, one grey line, and a pill on the right. Pass a `tone` and it picks every colour (from `noticeColors` in `palette.ts`). Never pass colours by hand.
+
+| Tone | Use it for | Look |
+|---|---|---|
+| `neutral` | Plain info: next card bill when nothing is urgent | Normal card + shadow, grey tile |
+| `accent` | An invitation: set a budget | Normal card + shadow, accent tile |
+| `info` | App status: sample data, SMS reading off | Normal card + shadow, blue tile |
+| `warn` | Needs you soon: payments to check, bill due in 3 days or less | Tinted card, soft border (no shadow), solid tile |
+| `danger` | Late or wrong: bill overdue | Tinted card, soft border (no shadow), solid tile |
+
+Rules:
+- **Pill** (`pill="Review"`): one or two words. Either what to do ("Review", "Set") or how urgent ("8 days", "Late"). A chevron shows inside it when the row is tappable.
+- **Title** carries the number or the main fact. **Grey line** carries the detail. Keep each to one line where you can.
+- **`compact`**: a slim row for app status, so it doesn't fight the hero card. Use it for "Sample data" only.
+- No pill and no `onPress`: a plain message inside a screen (for example, on a payment that needs a look).
+- `SmsNotice` uses the same colours (`info`, or `warn` when you must go to Android Settings).
 
 ### Buttons
 `primary` (ink fill) for the main action · `accent` for save/confirm · `secondary` (outlined) · `quiet` (text only) · `danger` (tinted red). Minimum height 52 (compact 40).

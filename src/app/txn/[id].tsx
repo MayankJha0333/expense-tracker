@@ -88,16 +88,14 @@ export default function TxnDetail() {
       {review ? (
         <View style={{ gap: space.sm }}>
           <NoticeRow
+            tone="warn"
             icon="help-circle-outline"
-            iconBg={p.warn}
-            iconColor={p.onWarn}
             title={credit ? 'Is this really income?' : "We weren't sure what this was"}
             body={
               credit
                 ? 'Money from a person may be a friend paying you back. If so, turn off "Count as money in" below.'
                 : 'Pick the right category below, or confirm it if "Other" is right.'
             }
-            tone={{ bg: p.warnSoft, border: p.warn }}
           />
           <Button
             label={credit ? 'Yes, it is income' : 'Other is right'}
