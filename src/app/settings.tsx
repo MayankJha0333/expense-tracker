@@ -199,7 +199,7 @@ export default function Settings() {
 }
 
 const MODES: { id: ThemeMode; label: string }[] = [
-  { id: 'system', label: 'System' },
+  { id: 'system', label: 'Auto' },
   { id: 'light', label: 'Light' },
   { id: 'dark', label: 'Dark' },
 ];
@@ -211,7 +211,7 @@ function Appearance() {
   const tap = () => Haptics.selectionAsync().catch(() => {});
   return (
     <View>
-      <SectionHeader title="Appearance" subtitle={mode === 'system' ? `Following your phone (${scheme} now)` : `Always ${mode}`} />
+      <SectionHeader title="Appearance" subtitle={mode === 'system' ? `Auto: follows your phone (${scheme} now)` : `Always ${mode}`} />
       <Card style={{ gap: space.lg }}>
         <Segmented
           value={mode}

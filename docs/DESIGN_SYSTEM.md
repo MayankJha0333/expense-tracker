@@ -15,6 +15,8 @@ See it live: **Settings › About › Design system** in a development build, or
 
 ## Rules
 
+- **Theme:** Auto (follow the phone) is the default. Light always uses Electric, dark always uses Midnight.
+
 1. **Use roles, never hex.** Write `p.accent`, not `#C8F65D`. Get colours with `const p = usePalette()`.
 2. **Colour never works alone.** Every coloured bar, dot or badge has a word or number next to it.
 3. **One loud thing per screen.** The hero card is the loud thing. Everything else sits on calm cards.
@@ -179,11 +181,11 @@ Five slots: Home · Activity · **+** · Insights · Accounts. The + uses `fab` 
 ### Logo
 A wallet with two bills tucked in and a coin on the clasp. Shapes: `src/lib/logo.ts` (1024 grid). Colours: `palette.logo`, worked out from the family colour, so the logo follows your pick.
 
-- **Light (Electric):** pale tinted tile, bills in the primary colour, white wallet, yellow coin, soft coloured drop shadow.
+- **Light (Electric):** tile in the primary colour (lighter top-left), white wallet, a gold bill and a gold coin (the highlight colour), soft coloured drop shadow. Chosen over a white tile because it stays clear at 24-32px on light pages.
 - **Dark (Midnight):** near-black tile with a thin border in the bright colour, bills and wallet in that colour, yellow coin, soft glow.
 - `LogoTile` adds the shadow/glow only from 48px up; below that it stays flat so it is crisp in the header.
 - `Wordmark` = tile + "Kharcha" in Sora Bold + a dot in the accent colour (the coin, echoed).
-- App icon files (launcher, Android adaptive + themed one-colour icon, splash, favicon) are generated from the same shapes: run `npx tsx scripts/make-icons.ts` (writes `assets/brand/*.svg`), then render them to PNG at 1024 px. The launcher uses Electric Blue.
+- App icon files (launcher, Android adaptive + themed one-colour icon, splash, favicon) are generated from the same shapes: run `npx tsx scripts/make-icons.ts` (writes `assets/brand/*.svg`), then render them to PNG at 1024 px. The launcher uses Electric Blue (light version).
 - Rules: don't add text or extra shapes inside the tile; keep at least 25% of the tile's size as space around it; never recolour it by hand, use the palette.
 
 ## Money and currencies

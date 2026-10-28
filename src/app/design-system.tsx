@@ -28,7 +28,7 @@ const SAMPLE: Txn[] = [
 const ROLES: (keyof Palette)[] = ['bg', 'surface', 'surfaceAlt', 'line', 'ink', 'inkSoft', 'muted', 'accent', 'highlight', 'hero', 'card', 'income', 'savings', 'warn', 'danger', 'track'];
 const TYPES: TypeVariant[] = ['display', 'title', 'amount', 'heading', 'bodyStrong', 'body', 'smallStrong', 'small', 'tiny', 'label'];
 const MODES: { id: ThemeMode; label: string }[] = [
-  { id: 'system', label: 'System' },
+  { id: 'system', label: 'Auto' },
   { id: 'light', label: 'Light' },
   { id: 'dark', label: 'Dark' },
 ];

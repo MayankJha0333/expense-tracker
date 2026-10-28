@@ -8,6 +8,7 @@ import {
   LEGACY_THEME_KEY,
   parseSavedTheme,
   THEME_KEY,
+  V2_THEME_KEY,
   type ElectricId,
   type MidnightId,
   type Palette,
@@ -75,8 +76,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.multiGet([THEME_KEY, LEGACY_THEME_KEY])
-      .then(([[, raw], [, legacy]]) => setChoice(parseSavedTheme(raw, legacy)))
+    AsyncStorage.multiGet([THEME_KEY, V2_THEME_KEY, LEGACY_THEME_KEY])
+      .then(([[, raw], [, v2], [, v1]]) => setChoice(parseSavedTheme(raw, v2, v1)))
       .catch(() => {})
       .finally(() => setReady(true));
   }, []);

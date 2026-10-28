@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="kt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F3F4FF"/><stop offset="1" stop-color="#D6DAFF"/></linearGradient>
-    <linearGradient id="kw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EFF0FF"/></linearGradient>
+    <linearGradient id="kt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6C7AFF"/><stop offset="1" stop-color="#2E3FE6"/></linearGradient>
+    <linearGradient id="kw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E7E9FF"/></linearGradient>
   </defs>
   <rect width="1024" height="1024" fill="url(#kt)"/>
   <g transform="translate(512 530) scale(0.9936000000000001) translate(-512 -530)">
-    <g transform="rotate(-20 430 390)"><rect x="236" y="250" width="400" height="260" rx="44" fill="#3346FF"/></g>
-    <g transform="rotate(-9 540 380)"><rect x="330" y="236" width="420" height="270" rx="44" fill="#8994FF"/><circle cx="560" cy="340" r="62" fill="#4B5CFF"/></g>
-    <rect x="196" y="466" width="632" height="384" rx="104" fill="#A3ACFF" opacity="1"/>
+    <g transform="rotate(-20 430 390)"><rect x="236" y="250" width="400" height="260" rx="44" fill="#FFC93C"/></g>
+    <g transform="rotate(-9 540 380)"><rect x="330" y="236" width="420" height="270" rx="44" fill="#D6DAFF"/><circle cx="560" cy="340" r="62" fill="#707EFF"/></g>
+    <rect x="196" y="466" width="632" height="384" rx="104" fill="#1C278C" opacity="1"/>
     <rect x="196" y="440" width="632" height="384" rx="104" fill="url(#kw)"/>
     <path d="M708 556 H812 a48 48 0 0 1 48 48 V660 a48 48 0 0 1 -48 48 H708 a76 76 0 0 1 0 -152 Z" fill="#3346FF"/>
     <circle cx="716" cy="632" r="40" fill="#FFC93C"/>

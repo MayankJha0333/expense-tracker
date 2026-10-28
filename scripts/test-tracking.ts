@@ -244,7 +244,7 @@ for (const p of palettes) {
     ['logo coin on its clasp', p.logo.dot, p.logo.clasp, p.logo.clasp, 3],
     ['logo clasp on the wallet', p.logo.clasp, p.logo.walletBottom, p.logo.walletBottom, 3],
     ['logo bill on the tile', p.logo.billBack, p.logo.tileBottom, p.logo.tileBottom, 2],
-    ['logo wallet edge on the tile', p.scheme === 'dark' ? p.logo.walletBottom : p.logo.walletShadow, p.logo.tileBottom, p.logo.tileBottom, 1.25],
+    ['logo wallet on the tile', p.logo.walletBottom, p.logo.tileBottom, p.logo.tileBottom, 3],
     ['money in text', p.income, p.surface, p.surface, 4.5],
     ['danger text', p.danger, p.surface, p.surface, 4.5],
     ['warning text', p.warn, p.surface, p.surface, 4.5],
@@ -292,7 +292,10 @@ for (const p of palettes) {
 check('saved theme falls back safely on bad data', JSON.stringify(parseSavedTheme('{"mode":"weird","midnight":"neon","electric":"x"}')) === '{"mode":"system","midnight":"lime","electric":"blue"}');
 check('saved theme falls back on broken JSON', parseSavedTheme('not json').mode === 'system');
 check('saved theme is read back', JSON.stringify(parseSavedTheme('{"mode":"light","midnight":"aqua","electric":"emerald"}')) === '{"mode":"light","midnight":"aqua","electric":"emerald"}');
-check('old one-colour setting is upgraded (accent → Midnight colour)', JSON.stringify(parseSavedTheme(null, '{"accent":"mango","mode":"dark"}')) === '{"mode":"dark","midnight":"mango","electric":"blue"}');
+check('old one-colour setting keeps its colour and moves to Auto', JSON.stringify(parseSavedTheme(null, null, '{"accent":"mango","mode":"dark"}')) === '{"mode":"system","midnight":"mango","electric":"blue"}');
+check('v2 setting keeps both colours and moves to Auto once', JSON.stringify(parseSavedTheme(null, '{"mode":"dark","midnight":"aqua","electric":"violet"}')) === '{"mode":"system","midnight":"aqua","electric":"violet"}');
+check('a new choice of Dark is kept after the move', parseSavedTheme('{"mode":"dark","midnight":"aqua","electric":"violet"}', '{"mode":"light"}').mode === 'dark');
+check('nothing saved → Auto', parseSavedTheme(null).mode === 'system');
 
 check('card name is shortened for the bill row', shortCardName('HDFC Bank credit card ••7788') === 'HDFC ••7788' && shortCardName('SBI Card credit card ••1234') === 'SBI Card ••1234' && shortCardName('OneCard ••5555') === 'OneCard ••5555', shortCardName('HDFC Bank credit card ••7788'));
 

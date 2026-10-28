@@ -192,7 +192,7 @@ export function mix(a: string, b: string, t: number): string {
 
 /*
  * The wallet logo: a tile, two bills tucked into a wallet, and a clasp with a coin.
- * Light (Electric): pale tinted tile, bills in the primary colour, white wallet, yellow coin.
+ * Light (Electric): brand-coloured tile, white wallet, a gold bill and a gold coin.
  * Dark (Midnight): near-black tile with a glow, bills and wallet in the bright colour.
  * Everything is worked out from the family's key colour, so the logo follows your pick.
  */
@@ -217,20 +217,22 @@ export type LogoColors = {
 
 export function logoColors(kind: 'light' | 'dark', key: string, coin: string): LogoColors {
   if (kind === 'light') {
+    // A solid brand tile so the logo stands out on light pages and stays clear when small:
+    // white wallet, a gold bill and a gold coin (the family's highlight colour).
     return {
-      tileTop: mix(key, '#FFFFFF', 0.94),
-      tileBottom: mix(key, '#FFFFFF', 0.8),
-      tileBorder: mix(key, '#FFFFFF', 0.7),
-      billBack: key,
-      billFront: mix(key, '#FFFFFF', 0.42),
-      billCoin: mix(key, '#FFFFFF', 0.12),
+      tileTop: mix(key, '#FFFFFF', 0.28),
+      tileBottom: mix(key, '#000000', 0.1),
+      tileBorder: mix(key, '#000000', 0.06),
+      billBack: coin,
+      billFront: mix(key, '#FFFFFF', 0.8),
+      billCoin: mix(key, '#FFFFFF', 0.3),
       walletTop: '#FFFFFF',
-      walletBottom: mix(key, '#FFFFFF', 0.92),
-      walletShadow: mix(key, '#FFFFFF', 0.55),
+      walletBottom: mix(key, '#FFFFFF', 0.88),
+      walletShadow: mix(key, '#000000', 0.45),
       walletShadowOpacity: 1,
       clasp: key,
       dot: coin,
-      glow: rgba(key, 0.28),
+      glow: rgba(key, 0.35),
     };
   }
   return {
@@ -395,15 +397,24 @@ export function buildPalette(scheme: Scheme, midnight: MidnightId, electric: Ele
 
 /* ---------- Saved theme choice ---------- */
 
-export const THEME_KEY = 'kharcha:theme:v2';
-export const LEGACY_THEME_KEY = 'kharcha:theme:v1';
+/** What we save: light/dark/Auto plus one colour for each family. */
 export type SavedTheme = { mode: ThemeMode; midnight: MidnightId; electric: ElectricId };
-export const DEFAULT_THEME: SavedTheme = { mode: 'system', midnight: 'lime', electric: 'blue' };
+
+export const THEME_KEY = 'kharcha:theme:v3';
+/** v2 kept a light/dark choice that earlier builds set for everyone; v3 starts everyone on Auto once. */
+export const V2_THEME_KEY = 'kharcha:theme:v2';
+export const LEGACY_THEME_KEY = 'kharcha:theme:v1';
 
 const isMode = (v: unknown): v is ThemeMode => v === 'system' || v === 'light' || v === 'dark';
 
-/** Reads the saved choice. Falls back safely on bad data, and upgrades the old one-accent format. */
-export function parseSavedTheme(raw: string | null, legacy: string | null = null): SavedTheme {
+/** Auto (follow the phone) by default. */
+export const DEFAULT_THEME: SavedTheme = { mode: 'system', midnight: 'lime', electric: 'blue' };
+
+/**
+ * Reads the saved theme. [raw] is the current (v3) entry. Older entries keep your colours
+ * but move you to Auto once, because older builds saved "dark" without you choosing it.
+ */
+export function parseSavedTheme(raw: string | null, v2: string | null = null, v1: string | null = null): SavedTheme {
   try {
     if (raw) {
       const v = JSON.parse(raw) as Partial<SavedTheme>;
@@ -413,11 +424,19 @@ export function parseSavedTheme(raw: string | null, legacy: string | null = null
         electric: v.electric && v.electric in ELECTRIC ? v.electric : DEFAULT_THEME.electric,
       };
     }
-    if (legacy) {
-      // v1 saved { accent, mode } where accent was a Midnight colour.
-      const v = JSON.parse(legacy) as { accent?: string; mode?: string };
+    if (v2) {
+      const v = JSON.parse(v2) as Partial<SavedTheme>;
       return {
-        mode: isMode(v.mode) ? v.mode : DEFAULT_THEME.mode,
+        mode: DEFAULT_THEME.mode,
+        midnight: v.midnight && v.midnight in MIDNIGHT ? v.midnight : DEFAULT_THEME.midnight,
+        electric: v.electric && v.electric in ELECTRIC ? v.electric : DEFAULT_THEME.electric,
+      };
+    }
+    if (v1) {
+      // v1 saved { accent, mode } where accent was a Midnight colour.
+      const v = JSON.parse(v1) as { accent?: string; mode?: string };
+      return {
+        mode: DEFAULT_THEME.mode,
         midnight: v.accent && v.accent in MIDNIGHT ? (v.accent as MidnightId) : DEFAULT_THEME.midnight,
         electric: DEFAULT_THEME.electric,
       };

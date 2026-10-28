@@ -10,7 +10,7 @@
     "android": {
       "package": "com.mayankjha.kharcha",
       "adaptiveIcon": {
-        "backgroundColor": "#E4E7FF",
+        "backgroundColor": "#2E3FE6",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png",
         "backgroundImage": "./assets/android-icon-background.png"
