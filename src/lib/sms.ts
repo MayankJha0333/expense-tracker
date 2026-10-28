@@ -41,7 +41,7 @@ export async function requestSmsPermission(): Promise<SmsPermission> {
   const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_SMS, {
     title: 'Read your bank SMS',
     message:
-      'Kharcha reads bank and card alerts on this phone to track your spending. OTPs, offers and chats are skipped. Nothing is uploaded: the app has no internet access.',
+      'Kharcha reads bank and card alerts on this phone to track your spending. OTPs, offers and chats are skipped. Nothing is uploaded: Kharcha has no server.',
     buttonPositive: 'Continue',
     buttonNegative: 'Not now',
   });

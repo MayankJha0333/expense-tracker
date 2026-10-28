@@ -1,3 +1,4 @@
+import { Redirect } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +16,8 @@ import { ELECTRIC, ELECTRIC_IDS, MIDNIGHT, MIDNIGHT_IDS, radius, space, type, us
 /*
  * Kharcha design system, live. Every token and component in the current theme,
  * with a quick switcher for all 8 themes. Used for visual QA (docs/DESIGN_SYSTEM.md).
- * Open with kharcha://design-system, or Settings › About › Design system in dev builds.
+ * Open with kharcha://design-system, or Settings › About › Design system.
+ * Development builds only: release builds hide the link and send this route back to Home.
  */
 
 const SAMPLE: Txn[] = [
@@ -33,7 +35,7 @@ const MODES: { id: ThemeMode; label: string }[] = [
   { id: 'dark', label: 'Dark' },
 ];
 
-export default function DesignSystem() {
+function DesignSystem() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const { mode, scheme, midnight, electric, setMode, setMidnight, setElectric } = useTheme();
@@ -268,3 +270,9 @@ const styles = StyleSheet.create({
   heroTile: { flex: 1, borderRadius: 18, padding: space.md },
   elev: { flex: 1, height: 72, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
 });
+
+/** Release builds never show the design system, even if someone opens kharcha://design-system. */
+export default function DesignSystemRoute() {
+  if (!__DEV__) return <Redirect href="/" />;
+  return <DesignSystem />;
+}

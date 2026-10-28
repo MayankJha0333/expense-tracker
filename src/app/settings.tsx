@@ -1,8 +1,7 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,7 +11,6 @@ import { Button, Card, Chip, Divider, Icon, ListRow, SectionHeader, Segmented, T
 import { PressScale, Stagger } from '../components/motion';
 import { CURRENCIES, CURRENCY_CODES } from '../lib/currency';
 import type { SampleKind } from '../lib/demo';
-import { runPrivacyChecks, type CheckState, type PrivacyCheck } from '../lib/offline';
 import { installInfo, smsSupported } from '../lib/sms';
 import { useStore } from '../lib/store';
 import type { IconName } from '../lib/types';
@@ -41,19 +39,9 @@ export default function Settings() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const { source, permission, requestAccess, chooseSource, eraseAll, goals, budget, txns } = useStore();
-  const [checks, setChecks] = useState<PrivacyCheck[] | null>(null);
   const install = installInfo();
 
-  useEffect(() => {
-    runPrivacyChecks().then(setChecks, () => setChecks([]));
-  }, []);
-  const check = useCallback(() => {
-    setChecks(null);
-    runPrivacyChecks().then(setChecks, () => setChecks([]));
-  }, []);
-
   const manualCount = txns.filter((t) => t.isManual).length;
-  const allPass = !!checks && checks.length > 0 && checks.every((c) => c.state === 'pass');
 
   const confirmErase = () => {
     Alert.alert(
@@ -98,26 +86,10 @@ export default function Settings() {
               Your data stays on this phone
             </Txt>
             <Txt variant="small" color={p.cardMuted}>
-              {allPass ? 'Checked just now on this device.' : 'Kharcha works without the internet.'}
+              No account and no server. Nothing you track is uploaded.
             </Txt>
           </View>
         </View>
-      </View>
-
-      <View>
-        <SectionHeader title="Privacy checks" subtitle="Run on this device. They send nothing." action="Run again" onAction={check} />
-        <Card style={{ gap: space.md }}>
-          {checks === null ? (
-            <ActivityIndicator color={p.accent} />
-          ) : (
-            checks.map((c, i) => (
-              <View key={c.id} style={{ gap: space.md }}>
-                {i > 0 ? <Divider /> : null}
-                <CheckRow check={c} />
-              </View>
-            ))
-          )}
-        </Card>
       </View>
 
       <View>
@@ -378,35 +350,6 @@ function SwatchRow<T extends string>({
   );
 }
 
-const STATE_LOOK: Record<CheckState, { icon: IconName; label: string }> = {
-  pass: { icon: 'check-circle', label: 'Verified' },
-  fail: { icon: 'close-circle', label: 'Not met' },
-  dev: { icon: 'wrench-outline', label: 'Dev build' },
-  na: { icon: 'minus-circle-outline', label: 'Not checked' },
-};
-
-function CheckRow({ check }: { check: PrivacyCheck }) {
-  const p = usePalette();
-  const tone = { pass: p.income, fail: p.danger, dev: p.accentInk, na: p.muted }[check.state];
-  const look = STATE_LOOK[check.state];
-  return (
-    <View style={styles.check} accessible accessibilityLabel={`${check.title}: ${look.label}. ${check.detail}`}>
-      <Icon name={look.icon} size={22} color={tone} />
-      <View style={{ flex: 1, gap: 4 }}>
-        <View style={styles.checkHead}>
-          <Txt variant="bodyStrong" style={{ flex: 1 }}>
-            {check.title}
-          </Txt>
-          <Tag label={look.label} color={tone} />
-        </View>
-        <Txt variant="small" color={p.muted}>
-          {check.detail}
-        </Txt>
-      </View>
-    </View>
-  );
-}
-
 function Count({ value, label }: { value: number; label: string }) {
   const p = usePalette();
   return (
@@ -427,8 +370,6 @@ const styles = StyleSheet.create({
   heroHead: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   shield: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   designRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  check: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
-  checkHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   counts: { flexDirection: 'row', gap: space.sm },
   swatches: { flexDirection: 'row', justifyContent: 'space-between' },
   swatchHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },

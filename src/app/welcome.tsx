@@ -13,7 +13,7 @@ import { cat, type IconName } from '../lib/types';
 import { radius, space, usePalette } from '../theme';
 
 const POINTS: { icon: IconName; title: string; body: string }[] = [
-  { icon: 'wifi-off', title: 'No internet, by design', body: 'The app has no permission to go online. Android itself blocks it.' },
+  { icon: 'cloud-off-outline', title: 'Nothing is uploaded', body: 'No account and no server. Your payments are read and added up on this phone.' },
   { icon: 'message-lock-outline', title: 'Only bank, card and UPI alerts', body: 'Chats from people are dropped before the app reads them. OTPs and offers are ignored.' },
   { icon: 'cellphone-lock', title: 'Stays on this phone', body: 'No account, no server, no cloud backup. Delete everything with one tap.' },
 ];

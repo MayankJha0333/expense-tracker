@@ -1,10 +1,8 @@
 import { NativeModule, requireOptionalNativeModule } from 'expo';
 
-import type { InstallInfo, NetworkStatus } from './SmsReader.types';
+import type { InstallInfo } from './SmsReader.types';
 
 declare class DeviceGuardModule extends NativeModule<{}> {
-  /** Whether Android would let this app open a network socket. Sends nothing. */
-  networkStatus(): NetworkStatus;
   /** How this copy of the app was installed. */
   installInfo(): InstallInfo;
 }

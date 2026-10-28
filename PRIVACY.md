@@ -2,7 +2,7 @@
 
 _Last updated 28 October 2026_
 
-> Kharcha works entirely on your phone. There is no account, no server and no cloud. The Android app has no permission to use the internet, so your messages and money data cannot be sent anywhere by Kharcha.
+> Kharcha works entirely on your phone. There is no account, no server and no cloud. Kharcha does not send your messages or money data anywhere.
 
 ## Who we are
 
@@ -40,7 +40,7 @@ Sample data ("Explore with sample data") is made up, lives only in memory and is
 
 ## Internet and sharing
 
-The Android release build of Kharcha is made without the internet permission, so Android itself blocks it from opening any network connection. As a second layer, the app's code refuses web requests. You can check both under Settings → Privacy checks.
+Kharcha does not send your messages, payments or anything you type to any server. It has no server to send them to.
 
 Kharcha has no analytics, crash reporting, advertising or tracking code. Fonts and icons are built into the app, so nothing is downloaded.
 
@@ -48,13 +48,15 @@ We do not sell, share or receive your data, because it never leaves your phone t
 
 Android and Google Play may collect their own information about apps on your phone (for example, crash reports if you have chosen to share usage and diagnostics with Google). That is covered by Google's privacy policy, not this one.
 
-Development builds, used only by people working on the app, connect to the developer's own computer to load code. The web preview runs in a browser, is not covered by Android's internet block, cannot read SMS and keeps anything you type in that browser's storage.
+Development builds, used only by people working on the app, connect to the developer's own computer to load code. The web preview runs in a browser, cannot read SMS and keeps anything you type in that browser's storage.
 
 ## Permissions
 
 SMS (READ_SMS), optional: to find bank and card payments in your inbox. Without it, Kharcha works with entries you add by hand.
 
 Vibration (VIBRATE): for small taps of feedback when you save something.
+
+Internet (INTERNET): Android grants this to apps automatically, without asking you. Kharcha does not use it to send your data.
 
 Kharcha does not ask for any other permission. On Android 15 and later, if you installed Kharcha from a downloaded file instead of an app store, Android may lock the SMS permission until you choose "Allow restricted settings" for the app. This is an Android safety rule; Kharcha does not try to get around it.
 

@@ -8,12 +8,10 @@ import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { currencyLayout } from '../components/CurrencyScope';
-import { installNetworkGuard } from '../lib/offline';
 import { StoreProvider } from '../lib/store';
 import { ThemeProvider, usePalette, useTheme } from '../theme';
 
 // Before any screen loads, so nothing can slip a request out first.
-installNetworkGuard();
 
 const modal = { presentation: 'modal', animation: 'slide_from_bottom' } as const;
 
