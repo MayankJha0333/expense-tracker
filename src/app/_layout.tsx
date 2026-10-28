@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { currencyLayout } from '../components/CurrencyScope';
 import { installNetworkGuard } from '../lib/offline';
 import { StoreProvider } from '../lib/store';
 import { ThemeProvider, usePalette, useTheme } from '../theme';
@@ -42,10 +43,12 @@ function AppShell() {
       <StoreProvider>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         <Stack
+          screenLayout={currencyLayout}
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: p.bg },
-            animation: 'slide_from_right',
+            // Pushed screens slide in from the right while the one behind drifts left (iOS style).
+            animation: 'ios_from_right',
           }}
         >
           <Stack.Screen name="(tabs)" />

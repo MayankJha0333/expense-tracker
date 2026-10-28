@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SettingsSteps, smsCopy } from '../components/SmsNotice';
 import { LogoTile } from '../components/Logo';
 import { Badge, Button, Icon, Txt } from '../components/ui';
+import { Stagger } from '../components/motion';
 import { openAppSettings, sideloadRestricted, smsSupported } from '../lib/sms';
 import { useStore } from '../lib/store';
 import { cat, type IconName } from '../lib/types';
@@ -49,6 +50,7 @@ export default function Welcome() {
       style={{ backgroundColor: p.bg }}
       contentContainerStyle={{ padding: space.xl, paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.xl, gap: space.xl }}
     >
+      <Stagger>
       <View style={{ gap: space.lg }}>
         <LogoTile size={64} />
         <Txt variant="title" style={{ fontSize: 32, lineHeight: 38 }} accessibilityRole="header">
@@ -150,6 +152,7 @@ export default function Welcome() {
           Read the privacy policy
         </Txt>
       </Pressable>
+      </Stagger>
     </ScrollView>
   );
 }

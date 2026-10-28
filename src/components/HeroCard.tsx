@@ -1,7 +1,14 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, { Easing, ReduceMotion, ZoomIn } from 'react-native-reanimated';
 
+import { MOTION } from '../lib/motion';
 import { radius, space, usePalette } from '../theme';
+import { PressScale } from './motion';
+
+// The ring settles into the corner and the orb pops in after it. Once, when the card first shows.
+const ringIn = ZoomIn.duration(MOTION.fill).easing(Easing.out(Easing.cubic)).withInitialValues({ transform: [{ scale: 0.55 }] }).reduceMotion(ReduceMotion.System);
+const orbIn = ZoomIn.delay(260).springify().damping(12).stiffness(220).reduceMotion(ReduceMotion.System);
 
 /**
  * The big coloured card at the top of a screen (design 4a).
@@ -25,8 +32,8 @@ export function HeroCard({
   const p = usePalette();
   const body = (
     <View style={[styles.clip, { backgroundColor: p.hero }]}>
-      <View pointerEvents="none" style={[styles.ring, { borderColor: p.heroRing }]} />
-      {p.heroOrb !== 'transparent' ? <View pointerEvents="none" style={[styles.orb, { backgroundColor: p.heroOrb }]} /> : null}
+      <Animated.View entering={ringIn} pointerEvents="none" style={[styles.ring, { borderColor: p.heroRing }]} />
+      {p.heroOrb !== 'transparent' ? <Animated.View entering={orbIn} pointerEvents="none" style={[styles.orb, { backgroundColor: p.heroOrb }]} /> : null}
       <View style={styles.content}>{children}</View>
     </View>
   );
@@ -39,14 +46,9 @@ export function HeroCard({
     );
   }
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      style={({ pressed }) => [...shadow, { opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] }]}
-    >
+    <PressScale onPress={onPress} scaleTo={0.985} accessibilityRole="button" accessibilityLabel={accessibilityLabel} style={shadow}>
       {body}
-    </Pressable>
+    </PressScale>
   );
 }
 

@@ -2,16 +2,19 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import Animated, { Easing, LinearTransition, ReduceMotion, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { billLine, MonthSwitcher, TxnRow } from '../../components/finance';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AmountBar, Button, Card, Empty, SectionHeader, Txt } from '../../components/ui';
+import { Stagger } from '../../components/motion';
 import { cardDues, categoryTotals, creditCardKeys, instrumentFor, type InstrumentKind } from '../../lib/accounts';
 import { monthName, monthShort, shortDay } from '../../lib/analytics';
 import { money, percent } from '../../lib/money';
 import { useStore } from '../../lib/store';
 import { cat } from '../../lib/types';
+import { MOTION } from '../../lib/motion';
 import { radius, space, usePalette } from '../../theme';
 
 const KIND_LABEL: Record<InstrumentKind, string> = {
@@ -24,6 +27,9 @@ const KIND_LABEL: Record<InstrumentKind, string> = {
 };
 
 const longDate = (ts: number) => shortDay(ts, true);
+/** The bill card grows or shrinks smoothly when its text changes. */
+const settle = LinearTransition.duration(MOTION.base).easing(Easing.out(Easing.cubic)).reduceMotion(ReduceMotion.System);
+const popIn = ZoomIn.springify().damping(14).stiffness(260).withInitialValues({ transform: [{ scale: 0.92 }] }).reduceMotion(ReduceMotion.System);
 
 /** One card, bank account, wallet or cash: its bill (for credit cards), where the money went, and every payment. */
 export default function AccountScreen() {
@@ -49,6 +55,7 @@ export default function AccountScreen() {
       style={{ backgroundColor: p.bg }}
       contentContainerStyle={{ paddingTop: insets.top, paddingHorizontal: space.lg, paddingBottom: insets.bottom + space.xxl, gap: space.xl }}
     >
+      <Stagger>
       <ScreenHeader />
       <View style={styles.titleRow}>
         <View style={{ flex: 1, gap: 2 }}>
@@ -83,12 +90,14 @@ export default function AccountScreen() {
       {due && line ? (
         <View>
           <SectionHeader title="Bill" />
+          <Animated.View layout={settle}>
           <Card style={{ gap: space.md }}>
-            <View style={[styles.billLine, { backgroundColor: line.bg }]}>
+            {/* Keyed by status, so "Bill of ₹… paid" pops in when you mark it and back out when you undo. */}
+            <Animated.View key={`${due.status}-${due.paidVia ?? ''}`} entering={popIn} style={[styles.billLine, { backgroundColor: line.bg }]}>
               <Txt variant="bodyStrong" color={line.color}>
                 {line.text}
               </Txt>
-            </View>
+            </Animated.View>
             <Row label="Statement" value={longDate(due.bill.statementDate)} />
             <Row label="Total due" value={money(due.bill.amountDue, { decimals: true })} />
             {due.bill.minDue !== null ? <Row label="Minimum due" value={money(due.bill.minDue, { decimals: true })} /> : null}
@@ -120,6 +129,7 @@ export default function AccountScreen() {
               />
             ) : null}
           </Card>
+          </Animated.View>
         </View>
       ) : null}
 
@@ -158,6 +168,7 @@ export default function AccountScreen() {
           </Card>
         )}
       </View>
+      </Stagger>
     </ScrollView>
   );
 }

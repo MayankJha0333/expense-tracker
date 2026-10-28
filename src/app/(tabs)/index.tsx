@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TxnRow, MonthSwitcher } from '../../components/finance';
+import { AnimatedAmount } from '../../components/AnimatedAmount';
 import { Wordmark } from '../../components/Logo';
+import { PressScale, Stagger } from '../../components/motion';
 import { SmsNotice } from '../../components/SmsNotice';
 import { Ring } from '../../components/charts';
 import { HeroCard } from '../../components/HeroCard';
@@ -59,6 +61,7 @@ export default function Home() {
         contentContainerStyle={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: space.xxl, gap: space.xl }}
         refreshControl={smsOn ? <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={p.accent} colors={[p.accent]} /> : undefined}
       >
+        <Stagger>
         {/* Top bar: logo, month, privacy & settings */}
         <View style={styles.topBar}>
           <Wordmark size={30} />
@@ -91,10 +94,17 @@ export default function Home() {
             {overspent ? 'Overspent in' : 'Saved in'} {monthName(month).split(' ')[0]}
             {isCurrent ? ' so far' : ` ${month.year}`}
           </Txt>
-          <Txt variant="display" color={p.heroValue} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={styles.heroAmount}>
-            {overspent ? '-' : ''}
-            {money(Math.abs(summary.saved))}
-          </Txt>
+          <AnimatedAmount
+            value={summary.saved}
+            format={(v) => `${v < 0 ? '-' : ''}${money(Math.abs(v))}`}
+            variant="display"
+            color={p.heroValue}
+            tabular
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+            style={styles.heroAmount}
+          />
           {summary.received > 0 ? (
             <View style={[styles.heroChip, { backgroundColor: p.heroChip }]}>
               <Icon name={overspent ? 'trending-down' : 'trending-up'} size={14} color={p.heroChipText} />
@@ -108,8 +118,8 @@ export default function Home() {
             </Txt>
           )}
           <View style={styles.heroTiles}>
-            <HeroTile icon="arrow-bottom-left" label="Money in" value={money(summary.received)} />
-            <HeroTile icon="arrow-top-right" label="Money out" value={money(summary.spent)} />
+            <HeroTile icon="arrow-bottom-left" label="Money in" value={summary.received} />
+            <HeroTile icon="arrow-top-right" label="Money out" value={summary.spent} />
           </View>
           {summary.invested > 0 ? (
             <Txt variant="small" color={p.heroMuted}>
@@ -230,15 +240,16 @@ export default function Home() {
 
         {/* Budget, with a progress ring (design 4a) */}
         {pace && budget ? (
-          <Pressable
+          <PressScale
             onPress={() => router.push('/budget')}
+            scaleTo={0.98}
             accessibilityRole="button"
             accessibilityLabel={`Monthly budget, ${pace.used > 9.99 ? 'over 999%' : `${Math.round(pace.used * 100)}%`} used. ${pace.left >= 0 ? `${money(pace.left)} left` : `${money(-pace.left)} over`}. Edit budget.`}
           >
             <Card style={styles.budget}>
               <Ring progress={pace.used} size={64} thickness={8} color={budgetTone} track={p.track}>
                 <Txt variant="smallStrong" tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ maxWidth: 44, textAlign: 'center' }}>
-                  {pace.used > 9.99 ? '999%+' : `${Math.round(pace.used * 100)}%`}
+                  {pace.used > 9.99 ? '999%+' : <AnimatedAmount value={Math.round(pace.used * 100)} format={(v) => `${Math.round(v)}%`} variant="smallStrong" tabular />}
                 </Txt>
               </Ring>
               <View style={{ flex: 1, gap: 3 }}>
@@ -260,7 +271,7 @@ export default function Home() {
               </View>
               <Icon name="chevron-right" size={20} color={p.muted} />
             </Card>
-          </Pressable>
+          </PressScale>
         ) : (
           <NoticeRow
             tone="accent"
@@ -307,12 +318,13 @@ export default function Home() {
             </Txt>
           </View>
         ) : null}
+        </Stagger>
       </ScrollView>
     </View>
   );
 }
 
-function HeroTile({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+function HeroTile({ icon, label, value }: { icon: IconName; label: string; value: number }) {
   const p = usePalette();
   return (
     <View style={[styles.heroTile, { backgroundColor: p.heroTile }]}>
@@ -322,9 +334,7 @@ function HeroTile({ icon, label, value }: { icon: IconName; label: string; value
           {label}
         </Txt>
       </View>
-      <Txt variant="amount" color={p.heroText} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-        {value}
-      </Txt>
+      <AnimatedAmount value={value} format={(v) => money(v)} variant="amount" color={p.heroText} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} />
     </View>
   );
 }

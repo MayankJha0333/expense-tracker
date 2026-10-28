@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Badge, Button, Chip, Empty, NoticeRow, Txt } from '../../components/ui';
+import { Stagger } from '../../components/motion';
 import { needsReview, payLabel } from '../../lib/accounts';
 import { dayLabel, timeLabel } from '../../lib/analytics';
 import { CURRENCIES, currencyOf, getHomeCurrency } from '../../lib/currency';
@@ -72,6 +73,7 @@ export default function TxnDetail() {
       style={{ backgroundColor: p.bg }}
       contentContainerStyle={{ paddingTop: insets.top, paddingHorizontal: space.lg, paddingBottom: insets.bottom + space.xxl, gap: space.xl }}
     >
+      <Stagger>
       <ScreenHeader close />
 
       <View style={{ alignItems: 'center', gap: space.sm }}>
@@ -205,6 +207,7 @@ export default function TxnDetail() {
           }}
         />
       ) : null}
+      </Stagger>
     </ScrollView>
   );
 }

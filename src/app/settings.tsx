@@ -2,12 +2,14 @@ import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import Animated, { ReduceMotion, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SmsNotice } from '../components/SmsNotice';
 import { Button, Card, Chip, Divider, Icon, ListRow, SectionHeader, Segmented, Tag, Txt } from '../components/ui';
+import { PressScale, Stagger } from '../components/motion';
 import { CURRENCIES, CURRENCY_CODES } from '../lib/currency';
 import type { SampleKind } from '../lib/demo';
 import { runPrivacyChecks, type CheckState, type PrivacyCheck } from '../lib/offline';
@@ -76,6 +78,7 @@ export default function Settings() {
       style={{ backgroundColor: p.bg }}
       contentContainerStyle={{ paddingTop: insets.top, paddingHorizontal: space.lg, paddingBottom: insets.bottom + space.xxl, gap: space.xl }}
     >
+      <Stagger>
       <ScreenHeader />
       <Txt variant="title" accessibilityRole="header">
         Settings & privacy
@@ -194,6 +197,7 @@ export default function Settings() {
           <ListRow icon="information-outline" title="Version" subtitle={`Kharcha ${Constants.expoConfig?.version ?? ''}${__DEV__ ? ' (development build)' : ''}`} />
         </Card>
       </View>
+      </Stagger>
     </ScrollView>
   );
 }
@@ -250,6 +254,9 @@ function Appearance() {
     </View>
   );
 }
+
+/** The tick pops in on the colour you pick. */
+const checkIn = ZoomIn.springify().damping(12).stiffness(280).reduceMotion(ReduceMotion.System);
 
 const SAMPLE_LABEL: Record<SampleKind, string> = { india: 'India (₹)', us: 'US ($)', stress: 'Stress test' };
 
@@ -341,24 +348,29 @@ function SwatchRow<T extends string>({
         {items.map((it) => {
           const on = it.id === value;
           return (
-            <Pressable
+            <PressScale
               key={it.id}
+              scaleTo={0.92}
               onPress={() => onPick(it.id)}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
               accessibilityLabel={`${family} ${it.name}`}
-              style={({ pressed }) => [styles.swatchBtn, { opacity: pressed ? 0.7 : 1 }]}
+              style={styles.swatchBtn}
             >
               <View style={[styles.swatchRing, { borderColor: on ? p.ink : 'transparent' }]}>
                 <View style={[styles.swatchTile, { backgroundColor: it.fill }]}>
                   {it.dot ? <View style={[styles.swatchDot, { backgroundColor: it.dot }]} /> : null}
-                  {on ? <Icon name="check-bold" size={20} color={it.check} /> : null}
+                  {on ? (
+                    <Animated.View entering={checkIn}>
+                      <Icon name="check-bold" size={20} color={it.check} />
+                    </Animated.View>
+                  ) : null}
                 </View>
               </View>
               <Txt variant="small" color={on ? p.ink : p.muted} style={on ? { fontFamily: 'Sora_600SemiBold' } : undefined}>
                 {it.name}
               </Txt>
-            </Pressable>
+            </PressScale>
           );
         })}
       </View>

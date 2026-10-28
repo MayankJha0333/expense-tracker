@@ -1,10 +1,13 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { router, type Href } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 
+import { SPRING } from '../lib/motion';
 import type { IconName } from '../lib/types';
 import { alpha, fonts, noticeColors, radius, space, type, usePalette, type NoticeTone, type TypeVariant } from '../theme';
+import { PressScale, useFill } from './motion';
 
 /** Text with the app's type scale and colours. */
 export function Txt({
@@ -115,17 +118,17 @@ export function Chip({
   // Plain chips (filters) fill with the accent when picked; coloured ones (categories) get a tint.
   const solid = selected && !color;
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
+      scaleTo={0.94}
       accessibilityRole="button"
       accessibilityLabel={a11y ?? label}
       accessibilityState={{ selected }}
-      style={({ pressed }) => [
+      style={[
         styles.chip,
         {
           backgroundColor: solid ? p.accent : selected ? alpha(tint, 0.16) : p.surface,
           borderColor: solid ? p.accent : selected ? tint : p.line,
-          opacity: pressed ? 0.7 : 1,
         },
       ]}
     >
@@ -135,7 +138,7 @@ export function Chip({
           {label}
         </Txt>
       ) : null}
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -173,22 +176,18 @@ export function Button({
     danger: { bg: p.dangerSoft, fg: p.danger, border: p.dangerSoft },
   }[kind];
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
-      style={({ pressed }) => [
-        styles.button,
-        compact && styles.buttonCompact,
-        { backgroundColor: look.bg, borderColor: look.border, opacity: disabled ? 0.4 : pressed ? 0.8 : 1 },
-      ]}
+      style={[styles.button, compact && styles.buttonCompact, { backgroundColor: look.bg, borderColor: look.border, opacity: disabled ? 0.4 : 1 }]}
     >
       {icon ? <MaterialCommunityIcons name={icon} size={compact ? 16 : 18} color={look.fg} /> : null}
       <Txt variant={compact ? 'smallStrong' : 'bodyStrong'} color={look.fg}>
         {label}
       </Txt>
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -208,18 +207,15 @@ export function IconButton({ icon, onPress, label, tint }: { icon: IconName; onP
 }
 
 /** Thin horizontal bar showing a share (0..1). */
-export function ShareBar({ share, color, height = 6, track }: { share: number; color: string; height?: number; track?: string }) {
+export function ShareBar({ share, color, height = 6, track, delay = 0 }: { share: number; color: string; height?: number; track?: string; delay?: number }) {
   const p = usePalette();
+  const target = Math.max(share > 0 ? 0.02 : 0, Math.min(1, Number.isFinite(share) ? share : 0));
+  // Fills from the left when it first shows, then glides to new values.
+  const fill = useFill(target, delay);
+  const bar = useAnimatedStyle(() => ({ width: `${fill.get() * 100}%` }));
   return (
     <View style={{ height, borderRadius: height / 2, backgroundColor: track ?? p.track, overflow: 'hidden' }}>
-      <View
-        style={{
-          width: `${Math.max(share > 0 ? 2 : 0, Math.min(100, share * 100))}%`,
-          height: '100%',
-          borderRadius: height / 2,
-          backgroundColor: color,
-        }}
-      />
+      <Animated.View style={[{ height: '100%', borderRadius: height / 2, backgroundColor: color }, bar]} />
     </View>
   );
 }
@@ -238,8 +234,30 @@ export function Tag({ label, color, icon }: { label: string; color: string; icon
 
 export function Segmented<T extends string>({ options, value, onChange }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   const p = usePalette();
+  const reduced = useReducedMotion();
+  const index = Math.max(0, options.findIndex((o) => o.id === value));
+  // The highlight slides under the picked option instead of jumping.
+  const [width, setWidth] = useState(0);
+  const segment = width > 0 ? (width - 8 - 4 * (options.length - 1)) / options.length : 0;
+  const x = useSharedValue(index * (segment + 4));
+  const target = index * (segment + 4);
+  const placed = useRef(false);
+  useEffect(() => {
+    if (segment <= 0) return;
+    // First placement jumps (nothing to slide from); later changes glide.
+    x.set(!placed.current || reduced ? target : withSpring(target, SPRING));
+    placed.current = true;
+  }, [target, segment, reduced, x]);
+  const thumb = useAnimatedStyle(() => ({ transform: [{ translateX: x.get() }] }));
   return (
-    <View style={[styles.segmented, { backgroundColor: p.surface, borderColor: p.line }]} accessibilityRole="tablist">
+    <View
+      style={[styles.segmented, { backgroundColor: p.surface, borderColor: p.line }]}
+      accessibilityRole="tablist"
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+    >
+      {segment > 0 ? (
+        <Animated.View pointerEvents="none" style={[styles.segmentThumb, { width: segment, backgroundColor: p.accent }, thumb]} />
+      ) : null}
       {options.map((o) => {
         const on = o.id === value;
         return (
@@ -248,7 +266,7 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
             onPress={() => onChange(o.id)}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
-            style={[styles.segment, on && { backgroundColor: p.accent, borderColor: p.accent }]}
+            style={[styles.segment, on && segment === 0 && { backgroundColor: p.accent, borderColor: p.accent }]}
           >
             <Txt variant="smallStrong" color={on ? p.onAccent : p.muted}>
               {o.label}
@@ -393,19 +411,30 @@ export function MixBar({ parts, height = 16, label }: { parts: { share: number; 
   return (
     <View style={{ flexDirection: 'row', height, gap: 3 }} accessible accessibilityRole="image" accessibilityLabel={label}>
       {shown.map((x, i) => (
-        <View
-          key={i}
-          style={{
-            flex: x.share,
-            backgroundColor: x.color,
-            borderTopLeftRadius: i === 0 ? 6 : 2,
-            borderBottomLeftRadius: i === 0 ? 6 : 2,
-            borderTopRightRadius: i === shown.length - 1 ? 6 : 2,
-            borderBottomRightRadius: i === shown.length - 1 ? 6 : 2,
-          }}
-        />
+        <MixPart key={i} share={x.share} color={x.color} first={i === 0} last={i === shown.length - 1} index={i} />
       ))}
     </View>
+  );
+}
+
+/** One part of a MixBar; grows to its share, one after another. */
+function MixPart({ share, color, first, last, index }: { share: number; color: string; first: boolean; last: boolean; index: number }) {
+  const fill = useFill(share, index * 70);
+  const grow = useAnimatedStyle(() => ({ flexGrow: Math.max(0.0001, fill.get()) }));
+  return (
+    <Animated.View
+      style={[
+        {
+          flexBasis: 0,
+          backgroundColor: color,
+          borderTopLeftRadius: first ? 6 : 2,
+          borderBottomLeftRadius: first ? 6 : 2,
+          borderTopRightRadius: last ? 6 : 2,
+          borderBottomRightRadius: last ? 6 : 2,
+        },
+        grow,
+      ]}
+    />
   );
 }
 
@@ -434,18 +463,13 @@ export function NoticeRow({
   const c = noticeColors(p, tone);
   const tile = compact ? 34 : 44;
   return (
-    <Pressable
+    <PressScale
       onPress={onPress}
       disabled={!onPress}
+      scaleTo={0.98}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={[title, body, pill].filter(Boolean).map((t) => String(t).replace(/[.\s]+$/, '')).join('. ')}
-      style={({ pressed }) => [
-        styles.notice,
-        compact && styles.noticeCompact,
-        { backgroundColor: c.cardBg, borderColor: c.border },
-        c.shadow ? { boxShadow: c.shadow } : null,
-        pressed && { opacity: 0.85, transform: [{ scale: 0.985 }] },
-      ]}
+      style={[styles.notice, compact && styles.noticeCompact, { backgroundColor: c.cardBg, borderColor: c.border }, c.shadow ? { boxShadow: c.shadow } : null]}
     >
       <View style={[styles.noticeIcon, { width: tile, height: tile, borderRadius: compact ? 11 : 14, backgroundColor: c.tileBg }]}>
         <MaterialCommunityIcons name={icon} size={compact ? 18 : 22} color={c.tileFg} />
@@ -470,7 +494,7 @@ export function NoticeRow({
       ) : onPress ? (
         <Icon name="chevron-right" size={20} color={p.muted} />
       ) : null}
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -532,6 +556,7 @@ export const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'transparent',
   },
+  segmentThumb: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: radius.sm },
   payBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, maxWidth: 160 },
   amountBarHead: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
   notice: {

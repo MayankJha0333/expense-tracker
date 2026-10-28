@@ -1,12 +1,15 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, SectionList, StyleSheet, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AnimatedAmount } from '../../components/AnimatedAmount';
 import { MonthSwitcher, TxnRow } from '../../components/finance';
+import { enterFade } from '../../components/motion';
 import { Chip, Empty, Icon, Txt } from '../../components/ui';
 import { needsReview, payGroupOf, payLabel } from '../../lib/accounts';
-import { dateKey, dayLabel, monthOf, monthShort, sameMonth } from '../../lib/analytics';
+import { dateKey, dayLabel, monthKey, monthOf, monthShort, sameMonth } from '../../lib/analytics';
 import { currencyOf, inHome, type CurrencyCode } from '../../lib/currency';
 import { money } from '../../lib/money';
 import { useStore } from '../../lib/store';
@@ -174,6 +177,8 @@ export default function Activity() {
         </ScrollView>
       </View>
 
+      {/* A new filter or month swaps the list with a quick crossfade instead of a hard cut. */}
+      <Animated.View key={`${filter}-${monthKey(month)}`} entering={enterFade} style={{ flex: 1 }}>
       <SectionList
         sections={sections}
         keyExtractor={(t) => t.id}
@@ -202,7 +207,7 @@ export default function Activity() {
                 color={filter === 'income' ? p.income : p.ink}
                 style={{ flexShrink: 1, maxWidth: '62%', textAlign: 'right' }}
               >
-                {total.text}
+                {filter === 'foreign' ? total.text : <AnimatedAmount value={total.amount} format={(v) => money(v)} variant="amount" tabular />}
               </Txt>
             </View>
           ) : undefined
@@ -239,6 +244,7 @@ export default function Activity() {
           />
         }
       />
+      </Animated.View>
     </View>
   );
 }

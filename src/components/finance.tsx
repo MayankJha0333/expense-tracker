@@ -1,13 +1,16 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { needsReview, payLabel, type CardDue } from '../lib/accounts';
-import { addMonths, daysInMonth, isAfter, monthName, monthShort, sameMonth, shortDay, thisMonth, timeLabel, type Month } from '../lib/analytics';
-import { money, moneyCompact, percent } from '../lib/money';
+import { addMonths, daysInMonth, isAfter, monthKey, monthName, monthShort, sameMonth, shortDay, thisMonth, timeLabel, type Month } from '../lib/analytics';
 import { currencyOf } from '../lib/currency';
+import { money, moneyCompact, percent } from '../lib/money';
 import { cat, countsAsIncome, countsAsSaving, countsAsSpend, isForeign, type CategoryId, type Txn } from '../lib/types';
 import { alpha, radius, space, usePalette, type Palette } from '../theme';
-import { Badge, Icon, PayBadge, ShareBar, Txt } from './ui';
+import { GrowBar } from './charts';
+import { enterFade, PressScale } from './motion';
+import { Badge, Icon, MixBar, PayBadge, ShareBar, Txt } from './ui';
 
 const shortDate = (ts: number) => shortDay(ts);
 
@@ -48,11 +51,12 @@ export function TxnRow({ txn, showDate }: { txn: Txn; showDate?: boolean }) {
   const pay = payLabel(txn);
   const label = counted ? c.label : 'Not counted';
   return (
-    <Pressable
+    <PressScale
       onPress={() => router.push(`/txn/${txn.id}`)}
+      scaleTo={0.985}
       accessibilityRole="button"
       accessibilityLabel={`${txn.merchant}, ${credit ? 'received' : 'paid'} ${amountText}${foreign ? `, in ${code}, not in totals` : ''}, ${label}, ${pay}${review ? ', needs a look' : ''}`}
-      style={({ pressed }) => [styles.row, { opacity: pressed ? 0.6 : counted ? 1 : 0.62 }]}
+      style={[styles.row, { opacity: counted ? 1 : 0.62 }]}
     >
       <Badge icon={counted ? c.icon : 'swap-horizontal'} color={counted ? c.color : p.muted} />
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
@@ -85,7 +89,7 @@ export function TxnRow({ txn, showDate }: { txn: Txn; showDate?: boolean }) {
           {when}
         </Txt>
       </View>
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -100,9 +104,11 @@ export function MonthSwitcher({ month, onChange, light, compact }: { month: Mont
         <Pressable onPress={() => onChange(addMonths(month, -1))} hitSlop={10} accessibilityRole="button" accessibilityLabel="Previous month" style={styles.pillBtn}>
           <Icon name="chevron-left" size={20} color={p.ink} />
         </Pressable>
-        <Txt variant="smallStrong" style={{ minWidth: 70, textAlign: 'center' }}>
-          {monthShort(month)} {month.year}
-        </Txt>
+        <Animated.View key={monthKey(month)} entering={enterFade}>
+          <Txt variant="smallStrong" style={{ minWidth: 70, textAlign: 'center' }}>
+            {monthShort(month)} {month.year}
+          </Txt>
+        </Animated.View>
         <Pressable
           onPress={() => canNext && onChange(addMonths(month, 1))}
           hitSlop={10}
@@ -121,9 +127,11 @@ export function MonthSwitcher({ month, onChange, light, compact }: { month: Mont
       <Pressable onPress={() => onChange(addMonths(month, -1))} hitSlop={12} accessibilityRole="button" accessibilityLabel="Previous month">
         <Icon name="chevron-left" size={24} color={color} />
       </Pressable>
-      <Txt variant="bodyStrong" color={color} style={{ minWidth: 132, textAlign: 'center' }}>
-        {monthName(month)}
-      </Txt>
+      <Animated.View key={monthKey(month)} entering={enterFade}>
+        <Txt variant="bodyStrong" color={color} style={{ minWidth: 132, textAlign: 'center' }}>
+          {monthName(month)}
+        </Txt>
+      </Animated.View>
       <Pressable
         onPress={() => canNext && onChange(addMonths(month, 1))}
         hitSlop={12}
@@ -141,23 +149,12 @@ export function MonthSwitcher({ month, onChange, light, compact }: { month: Mont
 /** One bar split into category colours, widest first. */
 export function StackedBar({ slices, height = 12 }: { slices: { category: CategoryId; share: number }[]; height?: number }) {
   const shown = slices.filter((s) => s.share > 0.004);
-  if (shown.length === 0) return <View style={{ height }} />;
   return (
-    <View style={{ flexDirection: 'row', height, gap: 3 }}>
-      {shown.map((s, i) => (
-        <View
-          key={s.category}
-          style={{
-            flex: s.share,
-            backgroundColor: cat(s.category).color,
-            borderTopLeftRadius: i === 0 ? height / 2 : 2,
-            borderBottomLeftRadius: i === 0 ? height / 2 : 2,
-            borderTopRightRadius: i === shown.length - 1 ? height / 2 : 2,
-            borderBottomRightRadius: i === shown.length - 1 ? height / 2 : 2,
-          }}
-        />
-      ))}
-    </View>
+    <MixBar
+      height={height}
+      parts={shown.map((s) => ({ share: s.share, color: cat(s.category).color }))}
+      label={shown.map((s) => `${cat(s.category).label} ${percent(s.share)}`).join(', ')}
+    />
   );
 }
 
@@ -271,12 +268,7 @@ export function CategoryRow({
   const p = usePalette();
   const c = cat(category);
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.catRow, { opacity: pressed ? 0.6 : 1 }]}
-    >
+    <PressScale onPress={onPress} disabled={!onPress} scaleTo={0.985} accessibilityRole="button" style={styles.catRow}>
       <Badge icon={c.icon} color={c.color} size={36} />
       <View style={{ flex: 1, gap: 6 }}>
         <View style={styles.between}>
@@ -300,7 +292,7 @@ export function CategoryRow({
           ) : null}
         </View>
       </View>
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -336,13 +328,10 @@ export function Bars({
             <Txt variant="tiny" color={active ? p.ink : p.muted} numberOfLines={1}>
               {d.value > 0 ? moneyCompact(d.value) : ''}
             </Txt>
-            <View
-              style={{
-                width: '100%',
-                height: h,
-                borderRadius: 6,
-                backgroundColor: active ? (color ?? p.accent) : alpha(color ?? p.muted, 0.28),
-              }}
+            <GrowBar
+              index={i}
+              height={h}
+              style={{ width: '100%', borderRadius: 6, backgroundColor: active ? (color ?? p.accent) : alpha(color ?? p.muted, 0.28) }}
             />
             <Txt variant="tiny" color={active ? p.ink : p.muted}>
               {d.label}

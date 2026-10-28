@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Ring } from '../components/charts';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Badge, Button, Card, Empty, Icon, SectionHeader, ShareBar, Txt } from '../components/ui';
+import { PressScale, Stagger } from '../components/motion';
 import { budgetPace, summarize, thisMonth } from '../lib/analytics';
 import { money, moneyCompact, percent } from '../lib/money';
 import { goalPlan } from '../lib/goals';
@@ -25,6 +26,7 @@ export default function Goals() {
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
       <ScrollView contentContainerStyle={{ paddingTop: insets.top, paddingHorizontal: space.lg, paddingBottom: insets.bottom + space.xxl, gap: space.xl }}>
+      <Stagger>
         <ScreenHeader />
         <Txt variant="title" accessibilityRole="header">
           Goals and budget
@@ -53,7 +55,7 @@ export default function Goals() {
 
         <View>
           <SectionHeader title="Monthly budget" />
-          <Pressable onPress={() => router.push('/budget')} accessibilityRole="button" accessibilityLabel="Edit monthly budget">
+          <PressScale scaleTo={0.98} onPress={() => router.push('/budget')} accessibilityRole="button" accessibilityLabel="Edit monthly budget">
             <Card style={{ gap: space.sm }}>
               {pace && budget ? (
                 <>
@@ -81,7 +83,7 @@ export default function Goals() {
                 </View>
               )}
             </Card>
-          </Pressable>
+          </PressScale>
         </View>
 
         <View>
@@ -104,6 +106,7 @@ export default function Goals() {
         <Txt variant="small" color={p.muted}>
           Goals are a plan you keep here. Kharcha never moves money; add to a goal when you put money aside.
         </Txt>
+      </Stagger>
       </ScrollView>
     </View>
   );
@@ -113,7 +116,7 @@ function GoalCard({ goal: g }: { goal: Goal }) {
   const p = usePalette();
   const share = g.target > 0 ? g.saved / g.target : 0;
   return (
-    <Pressable onPress={() => router.push(`/goal?id=${g.id}`)} accessibilityRole="button" accessibilityLabel={`${g.name}, ${money(g.saved)} of ${money(g.target)}`}>
+    <PressScale scaleTo={0.98} onPress={() => router.push(`/goal?id=${g.id}`)} accessibilityRole="button" accessibilityLabel={`${g.name}, ${money(g.saved)} of ${money(g.target)}`}>
       <Card style={{ gap: space.md }}>
         <View style={styles.goalHead}>
           <Badge icon={g.icon} color={g.color} size={44} />
@@ -139,7 +142,7 @@ function GoalCard({ goal: g }: { goal: Goal }) {
           </Txt>
         </View>
       </Card>
-    </Pressable>
+    </PressScale>
   );
 }
 

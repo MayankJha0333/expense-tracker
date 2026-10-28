@@ -5,7 +5,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SavingsLine } from '../../components/charts';
 import { Bars, CategoryRow, MonthSwitcher } from '../../components/finance';
+import { AnimatedAmount } from '../../components/AnimatedAmount';
 import { AmountBar, Badge, Card, Divider, Empty, MixBar, NoticeRow, SectionHeader, Segmented, ShareBar, Tag, Txt } from '../../components/ui';
+import { Stagger } from '../../components/motion';
 import { needsReview, NOT_COUNTED_LABEL, notCountedIncome, PAY_GROUP_LABEL, payGroupColorIndex, payMix } from '../../lib/accounts';
 import {
   addMonths,
@@ -55,6 +57,7 @@ export default function Insights() {
       style={{ backgroundColor: p.bg }}
       contentContainerStyle={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: 60, gap: space.xl }}
     >
+      <Stagger>
       <View style={{ gap: space.md }}>
         <View style={styles.titleRow}>
           <Txt variant="title" accessibilityRole="header">
@@ -73,9 +76,10 @@ export default function Insights() {
         />
       </View>
 
-      {view === 'spending' ? <Spending summary={summary} previous={previous} flow={flow} /> : null}
-      {view === 'income' ? <Income summary={summary} flow={flow} /> : null}
-      {view === 'savings' ? <Savings summary={summary} flow={flow} /> : null}
+      {view === 'spending' ? <Spending key="spending" summary={summary} previous={previous} flow={flow} /> : null}
+      {view === 'income' ? <Income key="income" summary={summary} flow={flow} /> : null}
+      {view === 'savings' ? <Savings key="savings" summary={summary} flow={flow} /> : null}
+      </Stagger>
     </ScrollView>
   );
 }
@@ -99,9 +103,7 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
         <Txt variant="small" color={p.muted}>
           Spent in {monthName(month)}
         </Txt>
-        <Txt variant="display" tabular adjustsFontSizeToFit numberOfLines={1}>
-          {money(summary.spent)}
-        </Txt>
+        <AnimatedAmount value={summary.spent} format={(v) => money(v)} variant="display" tabular adjustsFontSizeToFit numberOfLines={1} />
         {change !== null ? (
           <Txt variant="smallStrong" color={change > 0.05 ? p.warn : change < -0.05 ? p.income : p.muted}>
             {change > 0 ? 'Up' : 'Down'} {percent(Math.abs(change))} from {monthShort(previous.month)} ({money(previous.spent)})

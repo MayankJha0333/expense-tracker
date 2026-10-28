@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { billLine, MonthSwitcher } from '../../components/finance';
 import { Card, Divider, Empty, Icon, MixBar, SectionHeader, Txt } from '../../components/ui';
+import { PressScale, Stagger } from '../../components/motion';
 import {
   cardDues,
   creditCardKeys,
@@ -56,6 +57,7 @@ export default function Accounts() {
       style={{ backgroundColor: p.bg }}
       contentContainerStyle={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: space.xxl, gap: space.xl }}
     >
+      <Stagger>
       <View style={styles.titleRow}>
         <Txt variant="title" accessibilityRole="header">
           Accounts
@@ -180,6 +182,7 @@ export default function Accounts() {
         Cards and accounts are matched by the last 4 digits in your bank messages. Bills come from your card&apos;s statement SMS and are marked paid when a
         payment alert arrives.
       </Txt>
+      </Stagger>
     </ScrollView>
   );
 }
@@ -188,11 +191,12 @@ function InstrumentCard({ item, due, monthLabel }: { item: Instrument; due?: Car
   const p = usePalette();
   const line = due ? billLine(due, p) : null;
   return (
-    <Pressable
+    <PressScale
+      scaleTo={0.98}
       onPress={() => router.push(`/account/${encodeURIComponent(item.key)}`)}
       accessibilityRole="button"
       accessibilityLabel={`${item.name}. Spent ${money(item.spent)} in ${monthLabel}.${line ? ` ${line.text}.` : ''}`}
-      style={({ pressed }) => [styles.cardBox, { backgroundColor: p.surface, borderColor: p.line, opacity: pressed ? 0.8 : 1 }]}
+      style={[styles.cardBox, { backgroundColor: p.surface, borderColor: p.line }]}
     >
       <View style={styles.cardHead}>
         <View style={[styles.cardChip, { backgroundColor: p.series[1] }]} />
@@ -214,18 +218,19 @@ function InstrumentCard({ item, due, monthLabel }: { item: Instrument; due?: Car
           </Txt>
         </View>
       ) : null}
-    </Pressable>
+    </PressScale>
   );
 }
 
 function InstrumentRow({ item, icon }: { item: Instrument; icon: IconName }) {
   const p = usePalette();
   return (
-    <Pressable
+    <PressScale
+      scaleTo={0.985}
       onPress={() => router.push(`/account/${encodeURIComponent(item.key)}`)}
       accessibilityRole="button"
       accessibilityLabel={`${item.name}. In ${money(item.received)}, spent ${money(item.spent)}.`}
-      style={({ pressed }) => [styles.instRow, { opacity: pressed ? 0.6 : 1 }]}
+      style={styles.instRow}
     >
       <View style={[styles.instIcon, { backgroundColor: p.surfaceAlt }]}>
         <Icon name={icon} size={20} />
@@ -248,7 +253,7 @@ function InstrumentRow({ item, icon }: { item: Instrument; icon: IconName }) {
           Spent {money(item.spent)}
         </Txt>
       </View>
-    </Pressable>
+    </PressScale>
   );
 }
 
