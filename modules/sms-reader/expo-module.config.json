@@ -1,6 +1,6 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["expo.modules.smsreader.SmsReaderModule"]
+    "modules": ["expo.modules.smsreader.SmsReaderModule", "expo.modules.smsreader.DeviceGuardModule"]
   }
 }

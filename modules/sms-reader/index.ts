@@ -1,4 +1,4 @@
-// Re-export the native module. On web, it will be resolved to SmsReaderModule.web.ts
-// and on native platforms to SmsReaderModule.ts
+// Re-export the native modules. On web they resolve to the *.web.ts stubs (null).
 export { default } from './src/SmsReaderModule';
+export { default as DeviceGuard } from './src/DeviceGuardModule';
 export * from './src/SmsReader.types';

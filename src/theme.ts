@@ -1,106 +1,122 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
-/*
- * Kharcha visual system
- * - Paper: a cool, slightly green-grey page, like a bank passbook page.
- * - Ink: deep blue-slate for text and the month card.
- * - Marigold: the one accent. It marks spending (calendar heat, chart highlight).
- * - Leaf / Chili: money in, and "more than last month".
- * Amounts are set in Fraunces (a soft serif) so numbers read like a ledger.
- * Everything else is Manrope.
- */
+import {
+  buildPalette,
+  DEFAULT_THEME,
+  LEGACY_THEME_KEY,
+  parseSavedTheme,
+  THEME_KEY,
+  type ElectricId,
+  type MidnightId,
+  type Palette,
+  type SavedTheme,
+  type Scheme,
+  type ThemeMode,
+} from './lib/palette';
 
-export type Palette = {
-  bg: string;
-  surface: string;
-  surfaceAlt: string;
-  ink: string;
-  inkSoft: string;
-  muted: string;
-  line: string;
-  marigold: string;
-  marigoldSoft: string;
-  leaf: string;
-  chili: string;
-  /** The month card on Home. */
-  card: string;
-  cardText: string;
-  cardMuted: string;
-  /** Empty calendar cell. */
-  heatEmpty: string;
-  scrim: string;
-};
+export { alpha, buildPalette, ELECTRIC, ELECTRIC_IDS, MIDNIGHT, MIDNIGHT_IDS, rgba } from './lib/palette';
+export type { ElectricId, MidnightId, Palette, Scheme, ThemeMode } from './lib/palette';
 
-const light: Palette = {
-  bg: '#F3F5F2',
-  surface: '#FFFFFF',
-  surfaceAlt: '#E9EDEA',
-  ink: '#13232E',
-  inkSoft: '#34444E',
-  muted: '#66737B',
-  line: '#DCE2DE',
-  marigold: '#E8962E',
-  marigoldSoft: '#FBE6C8',
-  leaf: '#2E8B6A',
-  chili: '#C8453A',
-  card: '#13232E',
-  cardText: '#F3F5F2',
-  cardMuted: '#9DB0BB',
-  heatEmpty: '#E4E9E5',
-  scrim: 'rgba(19,35,46,0.45)',
-};
-
-const dark: Palette = {
-  bg: '#0E171D',
-  surface: '#16222A',
-  surfaceAlt: '#1D2B34',
-  ink: '#E6ECEE',
-  inkSoft: '#C2CDD2',
-  muted: '#8A99A2',
-  line: '#24333D',
-  marigold: '#F0A846',
-  marigoldSoft: '#3B2E1C',
-  leaf: '#4DB38A',
-  chili: '#E2675B',
-  card: '#1B2C37',
-  cardText: '#EEF2F0',
-  cardMuted: '#8FA3AE',
-  heatEmpty: '#1C2932',
-  scrim: 'rgba(0,0,0,0.55)',
-};
+/* Theme: fonts, sizes, and the saved accent + light/dark choice. Colours live in lib/palette.ts. */
 
 export const fonts = {
-  serif: 'Fraunces_600SemiBold',
-  serifMedium: 'Fraunces_500Medium',
-  regular: 'Manrope_500Medium',
-  semibold: 'Manrope_600SemiBold',
-  bold: 'Manrope_700Bold',
+  /** Big numbers: the amount on Home, totals, the add screen. */
+  number: 'Sora_700Bold',
+  heavy: 'Sora_800ExtraBold',
+  regular: 'Sora_400Regular',
+  medium: 'Sora_500Medium',
+  semibold: 'Sora_600SemiBold',
+  bold: 'Sora_700Bold',
 } as const;
 
-/** Type scale (roughly a 1.25 ratio). */
+/** Type scale. Sora is wide, so sizes are a touch smaller than usual. */
 export const type = {
-  display: { fontFamily: fonts.serif, fontSize: 46, lineHeight: 52, letterSpacing: -1 },
-  title: { fontFamily: fonts.serif, fontSize: 28, lineHeight: 34, letterSpacing: -0.5 },
-  amount: { fontFamily: fonts.serif, fontSize: 22, lineHeight: 28 },
-  heading: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22 },
+  display: { fontFamily: fonts.heavy, fontSize: 40, lineHeight: 46, letterSpacing: -1.5 },
+  title: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 32, letterSpacing: -0.6 },
+  amount: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 26, letterSpacing: -0.3 },
+  heading: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
   body: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 21 },
   bodyStrong: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 21 },
   small: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   smallStrong: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
-  tiny: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14 },
+  tiny: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14 },
+  label: { fontFamily: fonts.semibold, fontSize: 11, lineHeight: 14, letterSpacing: 0.6, textTransform: 'uppercase' },
 } as const;
 
 export type TypeVariant = keyof typeof type;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
-export const radius = { sm: 10, md: 16, lg: 24, pill: 999 } as const;
+export const radius = { sm: 10, md: 16, lg: 28, pill: 999 } as const;
 
-export function usePalette(): Palette {
-  return useColorScheme() === 'dark' ? dark : light;
+/* ---------- Theme choice: saved on the phone, read once at start ---------- */
+
+type ThemeState = {
+  palette: Palette;
+  scheme: Scheme;
+  mode: ThemeMode;
+  /** Colour used in dark mode (Midnight family). */
+  midnight: MidnightId;
+  /** Colour used in light mode (Electric family). */
+  electric: ElectricId;
+  /** False until the saved choice has been read. */
+  ready: boolean;
+  setMode: (m: ThemeMode) => void;
+  setMidnight: (id: MidnightId) => void;
+  setElectric: (id: ElectricId) => void;
+};
+
+const ThemeContext = createContext<ThemeState | null>(null);
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const system = useColorScheme();
+  const [choice, setChoice] = useState<SavedTheme>(DEFAULT_THEME);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.multiGet([THEME_KEY, LEGACY_THEME_KEY])
+      .then(([[, raw], [, legacy]]) => setChoice(parseSavedTheme(raw, legacy)))
+      .catch(() => {})
+      .finally(() => setReady(true));
+  }, []);
+
+  const save = useCallback((next: SavedTheme) => {
+    setChoice(next);
+    AsyncStorage.setItem(THEME_KEY, JSON.stringify(next)).catch(() => {});
+  }, []);
+
+  const scheme: Scheme = choice.mode === 'system' ? (system === 'light' ? 'light' : 'dark') : choice.mode;
+  const palette = useMemo(() => buildPalette(scheme, choice.midnight, choice.electric), [scheme, choice.midnight, choice.electric]);
+
+  const value = useMemo<ThemeState>(
+    () => ({
+      palette,
+      scheme,
+      mode: choice.mode,
+      midnight: choice.midnight,
+      electric: choice.electric,
+      ready,
+      setMode: (mode) => save({ ...choice, mode }),
+      setMidnight: (midnight) => save({ ...choice, midnight }),
+      setElectric: (electric) => save({ ...choice, electric }),
+    }),
+    [palette, scheme, choice, ready, save],
+  );
+
+  return createElement(ThemeContext.Provider, { value }, children);
 }
 
-/** Adds transparency to a #RRGGBB colour. */
-export function alpha(hex: string, a: number): string {
-  const n = Math.round(Math.min(1, Math.max(0, a)) * 255);
-  return hex + n.toString(16).padStart(2, '0');
+export function useTheme(): ThemeState {
+  const t = useContext(ThemeContext);
+  if (!t) throw new Error('useTheme must be used inside ThemeProvider');
+  return t;
+}
+
+/** The colours for the current mode and the colour picked for it. */
+export function usePalette(): Palette {
+  const t = useContext(ThemeContext);
+  const system = useColorScheme();
+  const fallback = useMemo(() => buildPalette(system === 'light' ? 'light' : 'dark', 'lime', 'blue'), [system]);
+  return t ? t.palette : fallback;
 }

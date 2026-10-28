@@ -72,3 +72,6 @@ coverage/
 
 # Claude Code (shared settings.json stays tracked)
 .claude/settings.local.json
+
+# Local snapshots made before big changes (not part of the app)
+_backup/

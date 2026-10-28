@@ -5,10 +5,10 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, View
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '../components/ScreenHeader';
-import { Button, Chip, Txt } from '../components/ui';
+import { Button, Chip, Segmented, Txt } from '../components/ui';
 import { categoryFromMerchant } from '../lib/categorize';
 import { useStore } from '../lib/store';
-import { DEBIT_CATEGORIES, type CategoryId } from '../lib/types';
+import { CREDIT_CATEGORIES, DEBIT_CATEGORIES, type CategoryId, type IconName, type PayMode, type TxnType } from '../lib/types';
 import { fonts, radius, space, usePalette } from '../theme';
 
 const DAYS = [
@@ -18,24 +18,43 @@ const DAYS = [
   { label: '3 days ago', back: 3 },
 ];
 
-/** Add a cash expense the bank never sees (chai, auto, sabzi). */
-export default function AddExpense() {
+const PAY_WITH: { id: PayMode; label: string; icon: IconName }[] = [
+  { id: 'cash', label: 'Cash', icon: 'cash' },
+  { id: 'upi', label: 'UPI', icon: 'cellphone' },
+  { id: 'card', label: 'Card', icon: 'credit-card-outline' },
+];
+
+const SPEND_CATEGORIES = DEBIT_CATEGORIES.filter((c) => c.countsAsSpend || c.isSaving);
+const INCOME_CATEGORIES = CREDIT_CATEGORIES.filter((c) => c.isIncome);
+
+/** Add what the bank never sees: cash spends (chai, auto, sabzi) and cash income. */
+export default function AddEntry() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const { addManual } = useStore();
+  const { addEntry } = useStore();
+  const [kind, setKind] = useState<TxnType>('debit');
   const [amountText, setAmountText] = useState('');
   const [what, setWhat] = useState('');
   const [category, setCategory] = useState<CategoryId>('food');
   const [picked, setPicked] = useState(false);
   const [daysBack, setDaysBack] = useState(0);
+  const [mode, setMode] = useState<PayMode>('cash');
 
   const amount = parseFloat(amountText.replace(/,/g, ''));
   const valid = Number.isFinite(amount) && amount > 0;
+  const income = kind === 'credit';
+
+  const switchKind = (k: TxnType) => {
+    setKind(k);
+    setPicked(false);
+    setCategory(k === 'credit' ? 'received' : 'food');
+    if (k === 'credit' && mode === 'card') setMode('cash');
+  };
 
   const onWhat = (text: string) => {
     setWhat(text);
     // Guess the category from the name until you pick one yourself.
-    if (!picked) {
+    if (!picked && !income) {
       const guess = categoryFromMerchant(text);
       if (guess && guess !== 'card_bill') setCategory(guess);
     }
@@ -45,7 +64,7 @@ export default function AddExpense() {
     if (!valid) return;
     const when = new Date();
     when.setDate(when.getDate() - daysBack);
-    addManual({ amount, merchant: what, category, timestamp: when.getTime() });
+    addEntry({ type: kind, amount, merchant: what, category, timestamp: when.getTime(), mode });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     router.back();
   };
@@ -56,11 +75,20 @@ export default function AddExpense() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingTop: insets.top, paddingHorizontal: space.lg, paddingBottom: insets.bottom + space.xxl, gap: space.xl }}
       >
-        <ScreenHeader close title="Add cash expense" />
+        <ScreenHeader close title={income ? 'Add income' : 'Add expense'} />
+
+        <Segmented
+          value={kind}
+          onChange={switchKind}
+          options={[
+            { id: 'debit', label: 'Expense' },
+            { id: 'credit', label: 'Income' },
+          ]}
+        />
 
         <View style={styles.amountRow}>
-          <Txt variant="display" color={valid ? p.ink : p.muted}>
-            ₹
+          <Txt variant="display" color={valid ? (income ? p.income : p.ink) : p.muted}>
+            {income ? '+₹' : '₹'}
           </Txt>
           <TextInput
             value={amountText}
@@ -69,22 +97,38 @@ export default function AddExpense() {
             placeholderTextColor={p.muted}
             keyboardType="decimal-pad"
             autoFocus
-            style={[styles.amountInput, { color: p.ink }]}
+            style={[styles.amountInput, { color: income ? p.income : p.ink }]}
             accessibilityLabel="Amount in rupees"
           />
         </View>
 
         <View style={{ gap: space.sm }}>
           <Txt variant="smallStrong" color={p.inkSoft}>
-            What was it for?
+            {income ? 'Where did it come from?' : 'What was it for?'}
           </Txt>
           <TextInput
             value={what}
             onChangeText={onWhat}
-            placeholder="Chai, auto, vegetables…"
+            placeholder={income ? 'Freelance work, gift, rent from tenant…' : 'Chai, auto, vegetables…'}
             placeholderTextColor={p.muted}
             style={[styles.textInput, { color: p.ink, backgroundColor: p.surface, borderColor: p.line }]}
           />
+        </View>
+
+        <View style={{ gap: space.sm }}>
+          <Txt variant="smallStrong" color={p.inkSoft}>
+            {income ? 'Received as' : 'Paid with'}
+          </Txt>
+          <View style={styles.wrap}>
+            {PAY_WITH.filter((m) => !income || m.id !== 'card').map((m) => (
+              <Chip key={m.id} label={m.label} icon={m.icon} selected={mode === m.id} onPress={() => setMode(m.id)} />
+            ))}
+          </View>
+          {mode !== 'cash' ? (
+            <Txt variant="tiny" color={p.muted}>
+              Only add UPI or card payments your bank didn&apos;t send an SMS for, or they&apos;ll be counted twice.
+            </Txt>
+          ) : null}
         </View>
 
         <View style={{ gap: space.sm }}>
@@ -103,7 +147,7 @@ export default function AddExpense() {
             Category
           </Txt>
           <View style={styles.wrap}>
-            {DEBIT_CATEGORIES.filter((c) => c.countsAsSpend).map((c) => (
+            {(income ? INCOME_CATEGORIES : SPEND_CATEGORIES).map((c) => (
               <Chip
                 key={c.id}
                 label={c.label}
@@ -119,15 +163,18 @@ export default function AddExpense() {
           </View>
         </View>
 
-        <Button label="Save expense" icon="check" onPress={save} disabled={!valid} />
+        <Button label={income ? 'Save income' : 'Save expense'} icon="check" kind={income ? 'primary' : 'accent'} onPress={save} disabled={!valid} />
+        <Txt variant="small" color={p.muted} style={{ textAlign: 'center' }}>
+          Saved only on this phone.
+        </Txt>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  amountInput: { flex: 1, fontFamily: fonts.serif, fontSize: 46, paddingVertical: 0 },
+  amountRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs, overflow: 'hidden' },
+  amountInput: { flex: 1, minWidth: 0, width: '100%', fontFamily: fonts.number, fontSize: 40, paddingVertical: 0 },
   textInput: {
     fontFamily: fonts.regular,
     fontSize: 16,

@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/manrope": "^0.4.2",
+    "@expo-google-fonts/sora": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~58.0.19",
@@ -21,6 +22,7 @@
     "react-native": "0.88.0",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "~4.30.0",
+    "react-native-svg": "15.16.0",
     "react-native-web": "~0.21.4"
   },
   "devDependencies": {
@@ -35,9 +37,12 @@
     "prebuild": "expo prebuild --platform android",
     "typecheck": "tsc --noEmit",
     "test:parser": "npx tsx scripts/test-parser.ts",
+    "test:tracking": "npx tsx scripts/test-tracking.ts",
+    "test": "npx tsx scripts/test-parser.ts && npx tsx scripts/test-tracking.ts",
     "lint": "expo lint",
     "demo:web": "EXPO_PUBLIC_DEMO=1 expo start --web",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "privacy:md": "npx tsx scripts/privacy-md.ts"
   },
   "private": true
 }

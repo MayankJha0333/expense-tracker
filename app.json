@@ -6,15 +6,24 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0A0A0B",
     "android": {
       "package": "com.mayankjha.kharcha",
       "adaptiveIcon": {
-        "backgroundColor": "#13232E",
+        "backgroundColor": "#0A0A0B",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundImage": "./assets/android-icon-background.png"
       },
+      "allowBackup": false,
       "permissions": [
         "android.permission.READ_SMS"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_SMS",
+        "android.permission.SEND_SMS"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -23,7 +32,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "./plugins/with-offline-release"
     ],
     "scheme": "kharcha",
     "ios": {

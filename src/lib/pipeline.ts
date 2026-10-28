@@ -1,6 +1,6 @@
 import { categorize } from './categorize';
-import { coreHeader, parseSms, type ParsedTxn, type RawSms } from './parser';
-import type { ScanStats, SkipReason, Txn } from './types';
+import { coreHeader, keyOf, parseCardBill, parseSms, type ParsedTxn, type RawSms } from './parser';
+import type { CardBill, ScanStats, SkipReason, Txn } from './types';
 
 const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
 
@@ -27,13 +27,14 @@ function isDuplicate(kept: Txn[], p: ParsedTxn, sms: RawSms): boolean {
   return false;
 }
 
-/** Raw inbox → clean list of transactions + counts of what was skipped. */
+/** Raw inbox → clean list of transactions, credit card bills, and counts of what was skipped. */
 export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<SkipReason, number>> = {}) {
   const skipped: Partial<Record<SkipReason, number>> = { ...extraSkipped };
   const bump = (r: SkipReason) => {
     skipped[r] = (skipped[r] ?? 0) + 1;
   };
   const kept: Txn[] = [];
+  const bills: CardBill[] = [];
   // Same text from the same sender within a minute = the phone stored it twice.
   const lastSeen = new Map<string, number>();
 
@@ -51,6 +52,11 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
     const r = parseSms(sms);
     if (!r.ok) {
       bump(r.reason);
+      // A card statement is not a payment, but its amount due and due date are worth keeping.
+      if (r.reason === 'reminder') {
+        const bill = parseCardBill(sms);
+        if (bill) bills.push(bill);
+      }
       continue;
     }
     const p = r.txn;
@@ -58,13 +64,20 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
       bump('duplicate');
       continue;
     }
+    const category = categorize(p, sms.body);
+    // "Credit to SBI" says nothing; for interest the bank is the source.
+    let merchant = category === 'interest' && p.bank && /^Credit to /.test(p.merchant) ? `${p.bank} interest` : p.merchant;
+    // "Payment received on your credit card" names no shop; say what it is.
+    if (category === 'card_bill' && p.type === 'credit' && p.mode === 'card' && /^Credit to /.test(merchant)) {
+      merchant = `${p.bank ?? 'Card'} card bill paid`;
+    }
     kept.push({
       id: `sms-${sms.id}`,
       amount: p.amount,
       type: p.type,
-      merchant: p.merchant,
-      merchantKey: p.merchantKey,
-      category: categorize(p, sms.body),
+      merchant,
+      merchantKey: merchant === p.merchant ? p.merchantKey : keyOf(merchant),
+      category,
       mode: p.mode,
       bank: p.bank,
       account: p.account,
@@ -79,5 +92,6 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
   kept.sort((a, b) => b.timestamp - a.timestamp);
   const personal = extraSkipped.personal ?? 0;
   const stats: ScanStats = { scanned: messages.length + personal, kept: kept.length, skipped };
-  return { txns: kept, stats };
+  bills.sort((a, b) => b.statementDate - a.statementDate);
+  return { txns: kept, stats, bills };
 }

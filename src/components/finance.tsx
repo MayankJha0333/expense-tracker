@@ -1,74 +1,125 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { needsReview, payLabel, type CardDue } from '../lib/accounts';
 import { addMonths, daysInMonth, isAfter, monthName, monthShort, sameMonth, thisMonth, timeLabel, type Month } from '../lib/analytics';
 import { inr, inrCompact, percent } from '../lib/money';
-import { cat, PAY_MODE_LABEL, type CategoryId, type Txn } from '../lib/types';
-import { alpha, radius, space, usePalette } from '../theme';
-import { Badge, Icon, ShareBar, Txt } from './ui';
+import { cat, countsAsIncome, countsAsSaving, countsAsSpend, type CategoryId, type Txn } from '../lib/types';
+import { alpha, radius, space, usePalette, type Palette } from '../theme';
+import { Badge, Icon, PayBadge, ShareBar, Txt } from './ui';
+
+const shortDate = (ts: number) => new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+/** One line about a credit card bill: what's left, when it's due, or that it's paid. */
+export function billLine(due: CardDue, p: Palette): { text: string; color: string; bg: string } {
+  const dateText = due.bill.dueDate ? shortDate(due.bill.dueDate) : null;
+  if (due.status === 'paid') {
+    return { text: `Bill of ${inr(due.bill.amountDue)} paid`, color: p.income, bg: p.incomeSoft };
+  }
+  if (due.status === 'overdue') {
+    const late = due.daysLeft !== null ? -due.daysLeft : 0;
+    return { text: `${inr(due.left)} overdue · ${late} ${late === 1 ? 'day' : 'days'} late`, color: p.danger, bg: p.dangerSoft };
+  }
+  const days = due.daysLeft;
+  const when = dateText ? ` · due ${dateText}${days !== null ? (days === 0 ? ' · today' : ` · ${days} ${days === 1 ? 'day' : 'days'}`) : ''}` : '';
+  const soon = days !== null && days <= 3;
+  return {
+    text: `${due.status === 'partly_paid' ? `${inr(due.left)} left of ${inr(due.bill.amountDue)}` : `Bill ${inr(due.left)}`}${when}`,
+    color: soon ? p.warn : p.ink,
+    bg: soon ? p.warnSoft : p.surfaceAlt,
+  };
+}
 
 /** One payment in a list. Tap opens its details. */
 export function TxnRow({ txn, showDate }: { txn: Txn; showDate?: boolean }) {
   const p = usePalette();
   const c = cat(txn.category);
   const credit = txn.type === 'credit';
+  const counted = countsAsSpend(txn) || countsAsIncome(txn) || countsAsSaving(txn);
+  const review = needsReview(txn);
   const when = showDate
     ? new Date(txn.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
     : timeLabel(txn.timestamp);
-  const sub = [c.label, txn.isManual ? 'Cash' : PAY_MODE_LABEL[txn.mode], when].join(', ');
+  const pay = payLabel(txn);
+  const label = counted ? c.label : 'Not counted';
   return (
     <Pressable
       onPress={() => router.push(`/txn/${txn.id}`)}
       accessibilityRole="button"
-      accessibilityLabel={`${txn.merchant}, ${inr(txn.amount)}, ${c.label}`}
-      style={({ pressed }) => [styles.row, { opacity: pressed ? 0.6 : 1 }]}
+      accessibilityLabel={`${txn.merchant}, ${credit ? 'received' : 'paid'} ${inr(txn.amount)}, ${label}, ${pay}${review ? ', needs a look' : ''}`}
+      style={({ pressed }) => [styles.row, { opacity: pressed ? 0.6 : counted ? 1 : 0.62 }]}
     >
-      <Badge icon={c.icon} color={c.color} />
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Txt variant="bodyStrong" numberOfLines={1} color={txn.excluded ? p.muted : p.ink}>
+      <Badge icon={counted ? c.icon : 'swap-horizontal'} color={counted ? c.color : p.muted} />
+      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+        <Txt variant="bodyStrong" numberOfLines={1}>
           {txn.merchant}
         </Txt>
-        <Txt variant="small" color={p.muted} numberOfLines={1}>
-          {sub}
-        </Txt>
+        <View style={styles.subRow}>
+          {review ? <View style={[styles.reviewDot, { backgroundColor: p.warn }]} /> : null}
+          <Txt variant="small" color={p.muted} numberOfLines={1} style={{ flexShrink: 1 }}>
+            {label}
+          </Txt>
+          <PayBadge label={pay} dashed={!counted} />
+        </View>
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
+      <View style={{ alignItems: 'flex-end', gap: 3 }}>
         <Txt
           variant="bodyStrong"
           tabular
-          color={txn.excluded ? p.muted : credit ? p.leaf : p.ink}
-          style={txn.excluded ? { textDecorationLine: 'line-through' } : null}
+          color={!counted ? p.muted : credit ? p.income : p.ink}
+          style={!counted ? { textDecorationLine: 'line-through' } : null}
         >
           {credit ? '+' : ''}
           {inr(txn.amount, { decimals: txn.amount < 100 })}
         </Txt>
-        {txn.excluded ? (
-          <Txt variant="tiny" color={p.muted}>
-            Not counted
-          </Txt>
-        ) : null}
+        <Txt variant="tiny" color={p.muted} numberOfLines={1}>
+          {when}
+        </Txt>
       </View>
     </Pressable>
   );
 }
 
-/** "‹  October 2026  ›" — the next arrow stops at the current month. */
-export function MonthSwitcher({ month, onChange, light }: { month: Month; onChange: (m: Month) => void; light?: boolean }) {
+/** "‹  October 2026  ›" — the next arrow stops at the current month. [compact] = small pill. */
+export function MonthSwitcher({ month, onChange, light, compact }: { month: Month; onChange: (m: Month) => void; light?: boolean; compact?: boolean }) {
   const p = usePalette();
   const color = light ? p.cardText : p.ink;
   const canNext = isAfter(thisMonth(), month);
+  if (compact) {
+    return (
+      <View style={[styles.pill, { borderColor: p.line, backgroundColor: p.surface }]}>
+        <Pressable onPress={() => onChange(addMonths(month, -1))} hitSlop={10} accessibilityRole="button" accessibilityLabel="Previous month" style={styles.pillBtn}>
+          <Icon name="chevron-left" size={20} color={p.ink} />
+        </Pressable>
+        <Txt variant="smallStrong" style={{ minWidth: 70, textAlign: 'center' }}>
+          {monthShort(month)} {month.year}
+        </Txt>
+        <Pressable
+          onPress={() => canNext && onChange(addMonths(month, 1))}
+          hitSlop={10}
+          disabled={!canNext}
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+          style={[styles.pillBtn, { opacity: canNext ? 1 : 0.25 }]}
+        >
+          <Icon name="chevron-right" size={20} color={p.ink} />
+        </Pressable>
+      </View>
+    );
+  }
   return (
     <View style={styles.switcher}>
-      <Pressable onPress={() => onChange(addMonths(month, -1))} hitSlop={12} accessibilityLabel="Previous month">
+      <Pressable onPress={() => onChange(addMonths(month, -1))} hitSlop={12} accessibilityRole="button" accessibilityLabel="Previous month">
         <Icon name="chevron-left" size={24} color={color} />
       </Pressable>
-      <Txt variant="bodyStrong" color={color} style={{ minWidth: 140, textAlign: 'center' }}>
+      <Txt variant="bodyStrong" color={color} style={{ minWidth: 132, textAlign: 'center' }}>
         {monthName(month)}
       </Txt>
       <Pressable
         onPress={() => canNext && onChange(addMonths(month, 1))}
         hitSlop={12}
         disabled={!canNext}
+        accessibilityRole="button"
         accessibilityLabel="Next month"
         style={{ opacity: canNext ? 1 : 0.25 }}
       >
@@ -103,7 +154,7 @@ export function StackedBar({ slices, height = 12 }: { slices: { category: Catego
 
 /**
  * The month as a calendar. Each day is shaded by how much you spent:
- * darker marigold = bigger day. Tap a day to see its payments.
+ * darker saffron = bigger day. Tap a day to see its payments.
  */
 export function HeatCalendar({ month, byDay }: { month: Month; byDay: Record<number, number> }) {
   const p = usePalette();
@@ -154,14 +205,14 @@ export function HeatCalendar({ month, byDay }: { month: Month; byDay: Record<num
                   styles.cell,
                   styles.cellBox,
                   {
-                    backgroundColor: lv > 0 ? alpha(p.marigold, lv) : p.heatEmpty,
+                    backgroundColor: lv > 0 ? alpha(p.accent, lv) : p.track,
                     opacity: future ? 0.35 : 1,
                     borderWidth: isToday ? 2 : 0,
                     borderColor: p.ink,
                   },
                 ]}
               >
-                <Txt variant="tiny" color={lv > 0.62 ? '#13232E' : lv > 0 ? p.ink : p.muted}>
+                <Txt variant="tiny" color={lv > 0.62 ? p.onAccent : lv > 0 ? p.ink : p.muted}>
                   {day}
                 </Txt>
               </Pressable>
@@ -180,7 +231,7 @@ export function HeatCalendar({ month, byDay }: { month: Month; byDay: Record<num
               width: 12,
               height: 12,
               borderRadius: 3,
-              backgroundColor: lv === 0 ? p.heatEmpty : alpha(p.marigold, lv),
+              backgroundColor: lv === 0 ? p.track : alpha(p.accent, lv),
             }}
           />
         ))}
@@ -233,7 +284,7 @@ export function CategoryRow({
             {percent(share)} of spending, {count} {count === 1 ? 'payment' : 'payments'}
           </Txt>
           {change != null && Math.abs(change) >= 1 ? (
-            <Txt variant="tiny" color={change > 0 ? p.chili : p.leaf}>
+            <Txt variant="tiny" color={change > 0 ? p.danger : p.income}>
               {change > 0 ? '↑ ' : '↓ '}
               {inrCompact(Math.abs(change))} vs last month
             </Txt>
@@ -244,17 +295,19 @@ export function CategoryRow({
   );
 }
 
-/** Simple vertical bars. The selected bar is marigold, the rest are quiet. */
+/** Simple vertical bars. The selected bar is saffron, the rest are quiet. */
 export function Bars({
   data,
   selected,
   onSelect,
   height = 120,
+  color,
 }: {
   data: { label: string; value: number }[];
   selected?: number;
   onSelect?: (index: number) => void;
   height?: number;
+  color?: string;
 }) {
   const p = usePalette();
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -279,7 +332,7 @@ export function Bars({
                 width: '100%',
                 height: h,
                 borderRadius: 6,
-                backgroundColor: active ? p.marigold : alpha(p.muted, 0.28),
+                backgroundColor: active ? (color ?? p.accent) : alpha(color ?? p.muted, 0.28),
               }}
             />
             <Txt variant="tiny" color={active ? p.ink : p.muted}>
@@ -293,7 +346,11 @@ export function Bars({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10, minHeight: 64 },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  reviewDot: { width: 7, height: 7, borderRadius: 4 },
+  pill: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999, paddingHorizontal: 2, height: 40 },
+  pillBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   switcher: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
   weekRow: { flexDirection: 'row', gap: 6 },
   weekLabel: { flex: 1, textAlign: 'center' },

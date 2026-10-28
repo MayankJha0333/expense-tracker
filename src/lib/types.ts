@@ -49,6 +49,8 @@ export type CategoryInfo = {
   icon: IconName;
   /** Money coming in that counts as income. */
   isIncome: boolean;
+  /** Money you put away (SIPs, investments). Counts toward savings, not spending. */
+  isSaving: boolean;
   /**
    * False for money moving between your own things (like paying your credit
    * card bill), so it is not counted as spending a second time.
@@ -61,13 +63,14 @@ const c = (
   label: string,
   color: string,
   icon: IconName,
-  kind: 'spend' | 'income' | 'neutral' = 'spend',
+  kind: 'spend' | 'income' | 'saving' | 'neutral' = 'spend',
 ): CategoryInfo => ({
   id,
   label,
   color,
   icon,
   isIncome: kind === 'income',
+  isSaving: kind === 'saving',
   countsAsSpend: kind === 'spend',
 });
 
@@ -83,7 +86,7 @@ export const CATEGORIES: CategoryInfo[] = [
   c('health', 'Health & fitness', '#4CB38A', 'heart-pulse'),
   c('education', 'Education', '#D9A62E', 'school-outline'),
   c('home', 'Rent & home', '#9B7B5B', 'home-outline'),
-  c('investments', 'Investments', '#3A7D6E', 'chart-line'),
+  c('investments', 'Investments & SIPs', '#2F7C9E', 'chart-line', 'saving'),
   c('emi', 'EMI & loans', '#8E5A9E', 'bank-outline'),
   c('cash', 'Cash', '#7D8A93', 'cash'),
   c('people', 'Sent to people', '#5C9BB8', 'account-multiple-outline'),
@@ -132,6 +135,22 @@ export type Txn = {
 
 export const countsAsSpend = (t: Txn) => t.type === 'debit' && cat(t.category).countsAsSpend && !t.excluded;
 export const countsAsIncome = (t: Txn) => t.type === 'credit' && cat(t.category).isIncome && !t.excluded;
+export const countsAsSaving = (t: Txn) => t.type === 'debit' && cat(t.category).isSaving && !t.excluded;
+
+/** Where the app's transactions come from. */
+export type DataSource = 'sms' | 'manual' | 'demo';
+
+export type Goal = {
+  id: string;
+  name: string;
+  target: number;
+  saved: number;
+  icon: IconName;
+  color: string;
+  /** Milliseconds since 1970, or null for "no date". */
+  deadline: number | null;
+  createdAt: number;
+};
 
 /** Why a message was not turned into a transaction. */
 export type SkipReason =
@@ -151,3 +170,20 @@ export type ScanStats = {
 };
 
 export const EMPTY_STATS: ScanStats = { scanned: 0, kept: 0, skipped: {} };
+
+/**
+ * A credit card statement read from a "statement generated / amount due" SMS.
+ * Not a payment: it says how much to pay and by when.
+ */
+export type CardBill = {
+  id: string;
+  bank: string | null;
+  /** Last 4 digits of the card. */
+  account: string;
+  amountDue: number;
+  minDue: number | null;
+  /** Midnight at the start of the due day, or null when the SMS gave no date. */
+  dueDate: number | null;
+  /** When the statement SMS arrived. */
+  statementDate: number;
+};

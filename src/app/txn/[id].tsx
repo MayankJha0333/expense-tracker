@@ -5,7 +5,8 @@ import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { Badge, Button, Chip, Empty, Txt } from '../../components/ui';
+import { Badge, Button, Chip, Empty, NoticeRow, Txt } from '../../components/ui';
+import { needsReview, payLabel } from '../../lib/accounts';
 import { dayLabel, timeLabel } from '../../lib/analytics';
 import { inr } from '../../lib/money';
 import { useStore } from '../../lib/store';
@@ -22,7 +23,7 @@ export default function TxnDetail() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { find, setCategory, setExcluded, deleteManual, txns } = useStore();
+  const { find, setCategory, setExcluded, deleteManual, confirmCategory, txns } = useStore();
   const txn = id ? find(id) : undefined;
   const [applyToAll, setApplyToAll] = useState(true);
 
@@ -40,6 +41,7 @@ export default function TxnDetail() {
   const options = credit ? CREDIT_CATEGORIES : DEBIT_CATEGORIES;
   const sameShop = txns.filter((t) => t.merchantKey === txn.merchantKey && t.id !== txn.id && !t.isManual).length;
   const notCountable = !credit && !c.countsAsSpend;
+  const countLabel = c.isSaving ? 'Count in my savings' : credit ? 'Count as money in' : 'Count in my spending';
 
   const pick = (next: CategoryId) => {
     if (next === txn.category) return;
@@ -49,9 +51,17 @@ export default function TxnDetail() {
 
   const details: [string, string][] = [
     ['When', `${dayLabel(txn.timestamp)}, ${timeLabel(txn.timestamp)}`],
-    ['Paid with', txn.isManual ? 'Cash (added by you)' : PAY_MODE_LABEL[txn.mode]],
+    [
+      credit ? 'Received via' : 'Paid with',
+      txn.isManual
+        ? `${PAY_MODE_LABEL[txn.mode]} (added by you)`
+        : payLabel(txn) === PAY_MODE_LABEL[txn.mode]
+          ? PAY_MODE_LABEL[txn.mode]
+          : `${PAY_MODE_LABEL[txn.mode]} · ${payLabel(txn)}`,
+    ],
   ];
-  if (txn.bank || txn.account) details.push(['Account', [txn.bank, txn.account ? `ending ${txn.account}` : null].filter(Boolean).join(', ')]);
+  if (txn.bank || txn.account) details.push([txn.mode === 'card' ? 'Card' : 'Account', [txn.bank, txn.account ? `ending ${txn.account}` : null].filter(Boolean).join(', ')]);
+  const review = needsReview(txn);
   if (txn.note) details.push(['Note', txn.note]);
 
   return (
@@ -66,14 +76,41 @@ export default function TxnDetail() {
         <Txt variant="heading" style={{ textAlign: 'center' }}>
           {txn.merchant}
         </Txt>
-        <Txt variant="display" color={credit ? p.leaf : p.ink} tabular>
+        <Txt variant="display" color={credit ? p.income : p.ink} tabular>
           {credit ? '+' : ''}
           {inr(txn.amount, { decimals: true })}
         </Txt>
         <Txt variant="small" color={p.muted}>
-          {credit ? 'Money in' : 'Money out'}, {c.label}
+          {credit ? 'Money in' : c.isSaving ? 'Saved' : 'Money out'} · {c.label}
         </Txt>
       </View>
+
+      {review ? (
+        <View style={{ gap: space.sm }}>
+          <NoticeRow
+            icon="help-circle-outline"
+            iconBg={p.warn}
+            iconColor={p.onWarn}
+            title={credit ? 'Is this really income?' : "We weren't sure what this was"}
+            body={
+              credit
+                ? 'Money from a person may be a friend paying you back. If so, turn off "Count as money in" below.'
+                : 'Pick the right category below, or confirm it if "Other" is right.'
+            }
+            tone={{ bg: p.warnSoft, border: p.warn }}
+          />
+          <Button
+            label={credit ? 'Yes, it is income' : 'Other is right'}
+            icon="check"
+            kind="secondary"
+            compact
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              confirmCategory(txn);
+            }}
+          />
+        </View>
+      ) : null}
 
       <View style={[styles.table, { borderColor: p.line }]}>
         {details.map(([k, v]) => (
@@ -106,25 +143,27 @@ export default function TxnDetail() {
                 Also changes {sameShop} other {sameShop === 1 ? 'payment' : 'payments'}, and new ones from now on.
               </Txt>
             </View>
-            <Switch value={applyToAll} onValueChange={setApplyToAll} trackColor={{ true: p.marigold, false: p.line }} thumbColor={p.surface} />
+            <Switch value={applyToAll} onValueChange={setApplyToAll} trackColor={{ true: p.accent, false: p.line }} thumbColor={p.surface} />
           </View>
         ) : null}
       </View>
 
       <View style={styles.switchRow}>
         <View style={{ flex: 1 }}>
-          <Txt variant="bodyStrong">{credit ? 'Count as money in' : 'Count in my spending'}</Txt>
+          <Txt variant="bodyStrong">{countLabel}</Txt>
           <Txt variant="small" color={p.muted}>
-            {notCountable
-              ? `${c.label} is never counted, so the same money isn't added twice.`
-              : 'Turn off for things like moving money to your own account.'}
+            {c.isSaving
+              ? 'Investments are money you kept, so they count toward savings, not spending.'
+              : notCountable
+                ? `${c.label} is never counted, so the same money isn't added twice.`
+                : 'Turn off for things like moving money to your own account.'}
           </Txt>
         </View>
         <Switch
           value={!txn.excluded}
-          disabled={notCountable}
+          disabled={notCountable && !c.isSaving}
           onValueChange={(v) => setExcluded(txn, !v)}
-          trackColor={{ true: p.marigold, false: p.line }}
+          trackColor={{ true: p.accent, false: p.line }}
           thumbColor={p.surface}
         />
       </View>
@@ -147,8 +186,8 @@ export default function TxnDetail() {
 
       {txn.isManual ? (
         <Button
-          label="Delete this expense"
-          kind="quiet"
+          label={credit ? 'Delete this income' : 'Delete this expense'}
+          kind="danger"
           icon="trash-can-outline"
           onPress={() => {
             deleteManual(txn.id);

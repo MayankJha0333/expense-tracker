@@ -1,39 +1,29 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { SettingsSteps, smsCopy } from '../components/SmsNotice';
+import { LogoTile } from '../components/Logo';
 import { Badge, Button, Icon, Txt } from '../components/ui';
-import { openAppSettings } from '../lib/sms';
+import { openAppSettings, sideloadRestricted, smsSupported } from '../lib/sms';
 import { useStore } from '../lib/store';
 import { cat, type IconName } from '../lib/types';
 import { radius, space, usePalette } from '../theme';
 
 const POINTS: { icon: IconName; title: string; body: string }[] = [
-  {
-    icon: 'message-text-lock-outline',
-    title: 'Only bank, card and UPI alerts',
-    body: 'Messages from people are dropped before the app even looks at them.',
-  },
-  {
-    icon: 'shield-check-outline',
-    title: 'OTPs and offers are ignored',
-    body: 'Codes, promos, bill reminders and failed payments never count as spending.',
-  },
-  {
-    icon: 'cellphone-lock',
-    title: 'Stays on this phone',
-    body: 'No sign-up, no server. Your messages never leave the device.',
-  },
+  { icon: 'wifi-off', title: 'No internet, by design', body: 'The app has no permission to go online. Android itself blocks it.' },
+  { icon: 'message-lock-outline', title: 'Only bank, card and UPI alerts', body: 'Chats from people are dropped before the app reads them. OTPs and offers are ignored.' },
+  { icon: 'cellphone-lock', title: 'Stays on this phone', body: 'No account, no server, no cloud backup. Delete everything with one tap.' },
 ];
 
 export default function Welcome() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const { permission, requestAccess, continueWithoutSms, status } = useStore();
+  const { permission, requestAccess, chooseSource, status } = useStore();
   const [asking, setAsking] = useState(false);
 
-  // Once access is given (or you pick manual mode) go to Home.
+  // Once data is ready (SMS allowed, sample or manual chosen) go to Home.
   useEffect(() => {
     if (status === 'ready' || status === 'loading') router.replace('/');
   }, [status]);
@@ -45,26 +35,40 @@ export default function Welcome() {
   };
 
   const food = cat('food');
+  const salary = cat('salary');
+  const needsSettings = permission === 'blocked' || permission === 'restricted';
+  const restricted = permission === 'restricted' || (permission === 'blocked' && sideloadRestricted());
 
   return (
     <ScrollView
       style={{ backgroundColor: p.bg }}
       contentContainerStyle={{ padding: space.xl, paddingTop: insets.top + space.xl, paddingBottom: insets.bottom + space.xl, gap: space.xl }}
     >
-      <Txt variant="title">Kharcha</Txt>
+      <View style={{ gap: space.lg }}>
+        <LogoTile size={64} />
+        <Txt variant="title" style={{ fontSize: 32, lineHeight: 38 }} accessibilityRole="header">
+          Know where your money goes.{'\n'}
+          <Txt variant="title" style={{ fontSize: 32, lineHeight: 38 }} color={p.accentInk}>
+            It never leaves your phone.
+          </Txt>
+        </Txt>
+        <Txt variant="body" color={p.inkSoft}>
+          Kharcha turns your bank SMS into a clear picture of what you earn, spend and save.
+        </Txt>
+      </View>
 
       {/* What the app does, shown with one example message */}
-      <View style={{ gap: space.md }}>
+      <View style={{ gap: space.sm }}>
         <View style={[styles.sms, { backgroundColor: p.surface, borderColor: p.line }]}>
           <Txt variant="tiny" color={p.muted}>
-            Example bank SMS
+            Bank SMS
           </Txt>
           <Txt variant="small" color={p.inkSoft}>
             Sent Rs.250.00 From HDFC Bank A/C *4521 To SWIGGY On 12/10/26 Ref 6285…
           </Txt>
         </View>
         <View style={{ alignItems: 'center' }}>
-          <Icon name="arrow-down" size={20} color={p.marigold} />
+          <Icon name="arrow-down" size={18} color={p.accent} />
         </View>
         <View style={[styles.result, { backgroundColor: p.card }]}>
           <Badge icon={food.icon} color={food.color} />
@@ -73,23 +77,35 @@ export default function Welcome() {
               Swiggy
             </Txt>
             <Txt variant="small" color={p.cardMuted}>
-              Food & dining, UPI
+              Food & dining · UPI
             </Txt>
           </View>
           <Txt variant="amount" color={p.cardText}>
             ₹250
           </Txt>
         </View>
+        <View style={[styles.result, { backgroundColor: p.card, marginTop: -2 }]}>
+          <Badge icon={salary.icon} color={p.cardIncome} />
+          <View style={{ flex: 1 }}>
+            <Txt variant="bodyStrong" color={p.cardText}>
+              Acme
+            </Txt>
+            <Txt variant="small" color={p.cardMuted}>
+              Salary · NEFT
+            </Txt>
+          </View>
+          <Txt variant="amount" color={p.cardIncome}>
+            +₹98,000
+          </Txt>
+        </View>
       </View>
-
-      <Txt variant="title" style={{ fontSize: 30, lineHeight: 36 }}>
-        Your spending, sorted from your bank SMS.
-      </Txt>
 
       <View style={{ gap: space.lg }}>
         {POINTS.map((pt) => (
           <View key={pt.title} style={styles.point}>
-            <Icon name={pt.icon} size={22} color={p.leaf} />
+            <View style={[styles.pointIcon, { backgroundColor: p.incomeSoft }]}>
+              <Icon name={pt.icon} size={20} color={p.income} />
+            </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Txt variant="bodyStrong">{pt.title}</Txt>
               <Txt variant="small" color={p.muted}>
@@ -101,28 +117,43 @@ export default function Welcome() {
       </View>
 
       <View style={{ gap: space.sm }}>
-        {permission === 'unavailable' ? (
-          <Txt variant="small" color={p.chili}>
-            {"This build can't read SMS. Expo Go doesn't include the SMS reader, so install a development build with “npx expo run:android”. You can still add expenses by hand."}
-          </Txt>
-        ) : permission === 'blocked' ? (
-          <>
-            <Txt variant="small" color={p.chili}>
-              SMS access is turned off for Kharcha. Open Settings, go to Permissions, and allow SMS. Then come back here.
+        {permission === 'unavailable' || !smsSupported ? (
+          <View style={[styles.note, { backgroundColor: p.surfaceAlt }]}>
+            <Txt variant="small" color={p.inkSoft}>
+              {smsCopy('unavailable').body}
             </Txt>
-            <Button label="Open settings" icon="cog-outline" onPress={openAppSettings} />
-          </>
+          </View>
+        ) : needsSettings ? (
+          <View style={[styles.note, { backgroundColor: p.accentSoft, gap: space.md }]}>
+            <Txt variant="bodyStrong">{smsCopy(restricted ? 'restricted' : 'blocked').title}</Txt>
+            <Txt variant="small" color={p.inkSoft}>
+              {smsCopy(restricted ? 'restricted' : 'blocked').body}
+            </Txt>
+            <SettingsSteps restricted={restricted} />
+            <Button label="Open App info" icon="cog-outline" onPress={openAppSettings} />
+          </View>
         ) : (
           <Button label={asking ? 'Waiting for your answer…' : 'Allow SMS access'} icon="message-processing-outline" onPress={onAllow} disabled={asking} />
         )}
-        <Button label="Add expenses by hand instead" kind="quiet" onPress={continueWithoutSms} />
+        <Button label="Explore with sample data" kind="secondary" icon="flask-outline" onPress={() => chooseSource('demo')} />
+        <Button label="Add entries by hand instead" kind="quiet" onPress={() => chooseSource('manual')} />
       </View>
+
+      <Pressable onPress={() => router.push('/privacy')} accessibilityRole="link" hitSlop={8} style={styles.policy}>
+        <Icon name="file-document-outline" size={16} color={p.muted} />
+        <Txt variant="smallStrong" color={p.muted} style={{ textDecorationLine: 'underline' }}>
+          Read the privacy policy
+        </Txt>
+      </Pressable>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   sms: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: 4, marginRight: space.xxl },
-  result: { borderRadius: radius.md, padding: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md, marginLeft: space.xxl },
+  result: { borderRadius: radius.md, padding: space.md, paddingHorizontal: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md, marginLeft: space.xxl },
   point: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
+  pointIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  note: { borderRadius: radius.md, padding: space.lg },
+  policy: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44 },
 });

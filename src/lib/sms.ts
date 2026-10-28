@@ -1,12 +1,34 @@
 import { Linking, PermissionsAndroid, Platform } from 'react-native';
 
-import SmsReader from '../../modules/sms-reader';
-import type { InboxResult } from '../../modules/sms-reader';
+import SmsReader, { DeviceGuard } from '../../modules/sms-reader';
+import type { InboxResult, InstallInfo } from '../../modules/sms-reader';
 
-export type SmsPermission = 'granted' | 'denied' | 'blocked' | 'unavailable';
+/**
+ * - blocked: you said no and Android won't ask again. Fix in App info → Permissions.
+ * - restricted: Android 15+ won't even ask, because the app was installed from a
+ *   downloaded APK. Fix in App info → ⋮ → Allow restricted settings, then Permissions.
+ * - unavailable: this build has no SMS reader (Expo Go, iOS, web).
+ */
+export type SmsPermission = 'granted' | 'denied' | 'blocked' | 'restricted' | 'unavailable';
 
 /** True when this build has the native SMS reader (not Expo Go, not iOS). */
 export const smsSupported = Platform.OS === 'android' && SmsReader !== null;
+
+export function installInfo(): InstallInfo | null {
+  try {
+    return DeviceGuard?.installInfo() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Android 15 added SMS to the "restricted settings" that sideloaded apps can't
+ * get until the user allows them. Apps from a store, or installed with adb, are not affected.
+ */
+export function sideloadRestricted(info = installInfo()): boolean {
+  return !!info && info.sdk >= 35 && (info.source === 'local_file' || info.source === 'downloaded_file');
+}
 
 export async function checkSmsPermission(): Promise<SmsPermission> {
   if (!smsSupported) return 'unavailable';
@@ -19,15 +41,17 @@ export async function requestSmsPermission(): Promise<SmsPermission> {
   const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_SMS, {
     title: 'Read your bank SMS',
     message:
-      'Kharcha reads bank and card alerts to track your spending. OTPs, offers and chats are skipped. Nothing leaves your phone.',
-    buttonPositive: 'Allow',
+      'Kharcha reads bank and card alerts on this phone to track your spending. OTPs, offers and chats are skipped. Nothing is uploaded: the app has no internet access.',
+    buttonPositive: 'Continue',
     buttonNegative: 'Not now',
   });
   if (result === PermissionsAndroid.RESULTS.GRANTED) return 'granted';
-  if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return 'blocked';
+  // A restricted app gets "never ask again" straight away, without any dialog.
+  if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return sideloadRestricted() ? 'restricted' : 'blocked';
   return 'denied';
 }
 
+/** Opens this app's page in Android Settings (App info). */
 export const openAppSettings = () => Linking.openSettings();
 
 const MONTHS_BACK = 13;

@@ -1,30 +1,46 @@
-import { Fraunces_500Medium, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
-import { Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
+import { Sora_400Regular, Sora_500Medium, Sora_600SemiBold, Sora_700Bold, Sora_800ExtraBold } from '@expo-google-fonts/sora';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
+import { useEffect } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { installNetworkGuard } from '../lib/offline';
 import { StoreProvider } from '../lib/store';
-import { usePalette } from '../theme';
+import { ThemeProvider, usePalette, useTheme } from '../theme';
+
+// Before any screen loads, so nothing can slip a request out first.
+installNetworkGuard();
+
+const modal = { presentation: 'modal', animation: 'slide_from_bottom' } as const;
 
 export default function RootLayout() {
-  const p = usePalette();
-  const [loaded] = useFonts({
-    Fraunces_500Medium,
-    Fraunces_600SemiBold,
-    Manrope_500Medium,
-    Manrope_600SemiBold,
-    Manrope_700Bold,
-  });
+  return (
+    <ThemeProvider>
+      <AppShell />
+    </ThemeProvider>
+  );
+}
 
-  if (!loaded) return <View style={{ flex: 1, backgroundColor: p.bg }} />;
+function AppShell() {
+  const p = usePalette();
+  const { scheme, ready } = useTheme();
+  // Font files are bundled in the app (node_modules/@expo-google-fonts), never fetched.
+  const [loaded] = useFonts({ Sora_400Regular, Sora_500Medium, Sora_600SemiBold, Sora_700Bold, Sora_800ExtraBold });
+
+  // Paint the window behind the app (seen during screen changes and the keyboard) in the theme colour.
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(p.bg).catch(() => {});
+  }, [p.bg]);
+
+  if (!loaded || !ready) return <View style={{ flex: 1, backgroundColor: p.bg }} />;
 
   return (
     <SafeAreaProvider>
       <StoreProvider>
-        <StatusBar style="auto" />
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
             headerShown: false,
@@ -34,10 +50,17 @@ export default function RootLayout() {
         >
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
-          <Stack.Screen name="txn/[id]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="txn/[id]" options={modal} />
+          <Stack.Screen name="add" options={modal} />
+          <Stack.Screen name="goal" options={modal} />
+          <Stack.Screen name="budget" options={modal} />
           <Stack.Screen name="category/[id]" />
           <Stack.Screen name="day/[date]" />
+          <Stack.Screen name="account/[key]" />
+          <Stack.Screen name="goals" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="privacy" />
+          <Stack.Screen name="design-system" />
         </Stack>
       </StoreProvider>
     </SafeAreaProvider>

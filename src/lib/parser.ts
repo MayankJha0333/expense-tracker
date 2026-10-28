@@ -1,4 +1,4 @@
-import type { PayMode, SkipReason, TxnType } from './types';
+import type { CardBill, PayMode, SkipReason, TxnType } from './types';
 
 /** One SMS as it comes from the phone's inbox. */
 export type RawSms = { id: string; sender: string; body: string; date: number };
@@ -110,6 +110,8 @@ const BAD_MERCHANT = new Set([
 ]);
 const MERCHANT_PREFIX = /^(upi[-/ ]|pos[ /]|ecom[ /]|vps[ /]|pg[ /]|iap[ /]|mps[ /]|[a-z]{2,4}\*)/i;
 const MERCHANT_SUFFIX = /\s+(pvt|private|ltd|limited|llp|inc|india|technologies|retail|co)\.?$/i;
+// Payroll credits often end with "SALARY" ("ACME PVT LTD SALARY"), which hides the company suffix.
+const PAYROLL_SUFFIX = /\s+(salary|sal|payroll|wages)$/i;
 
 // ---------- helpers ----------
 
@@ -259,7 +261,7 @@ export function cleanMerchant(raw: string): { name: string; personLike: boolean 
     if (readable.length < 3) return { name: s.toLowerCase(), personLike };
     s = readable;
   }
-  s = s.replace(MERCHANT_PREFIX, '');
+  s = s.replace(MERCHANT_PREFIX, '').replace(PAYROLL_SUFFIX, '');
   for (let i = 0; i < 3; i++) s = s.replace(MERCHANT_SUFFIX, '').trim();
   s = trimChars(s.replace(/\s+/g, ' ').trim(), '.,-*');
   if (s.length > 32) s = s.slice(0, 32).trim();
@@ -319,5 +321,76 @@ export function parseSms(sms: RawSms): ParseResult {
   return {
     ok: true,
     txn: { amount, type, merchant, merchantKey: keyOf(merchant), mode, bank, account, personLike },
+  };
+}
+
+// ---------- credit card statements ----------
+const CREDIT_CARD = /\bcredit\s*card\b|\bcc\b|\bsbi\s*card\b|\bonecard\b/i;
+const NUM = String.raw`([0-9][0-9,]*(?:\.[0-9]{1,2})?)`;
+const CUR = String.raw`(?:rs\.?|inr|₹)`;
+const BILL_TOTAL = [
+  new RegExp(String.raw`\b(?:total\s+(?:amount\s+|amt\.?\s+)?due|total\s+amt\.?\s+due|amount\s+due|amt\.?\s+due|statement\s+(?:balance|amount)|total\s+outstanding|outstanding\s+amount)\b[^0-9₹]{0,24}?(?:${CUR})?\s*:?\s*${NUM}`, 'i'),
+  new RegExp(String.raw`${CUR}\s*${NUM}\s+(?:is\s+)?(?:due|payable)\b`, 'i'),
+];
+const BILL_MIN = new RegExp(String.raw`\bmin(?:imum)?\.?\s+(?:amount\s+|amt\.?\s+)?due\b[^0-9₹]{0,16}?(?:${CUR})?\s*:?\s*${NUM}`, 'i');
+const BILL_DATE =
+  /\b(?:due\s+(?:date|by|on)|pay(?:able)?\s+by|due|by)\b\s*(?:is|:|-|of)?\s*(?:on\s+)?(\d{1,2})(?![0-9,])(?:st|nd|rd|th)?[\s\-/.]*([A-Za-z]{3,9}|\d{1,2})(?:[\s\-/.,]+(\d{2,4}))?/i;
+const MONTH_INDEX: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+
+const toNumber = (s: string) => parseFloat(s.replace(/,/g, ''));
+
+/** "15-Oct-26", "05/11/2026", "5th Nov" → midnight of that day. A missing year means the next one after the statement. */
+export function parseDueDate(text: string, statementDate: number): number | null {
+  const m = BILL_DATE.exec(text);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const monthRaw = m[2].toLowerCase();
+  const month = /^\d+$/.test(monthRaw) ? Number(monthRaw) - 1 : MONTH_INDEX[monthRaw.slice(0, 3)];
+  if (month === undefined || month < 0 || month > 11 || day < 1 || day > 31) return null;
+  const base = new Date(statementDate);
+  let year: number;
+  if (m[3]) {
+    year = Number(m[3]);
+    if (year < 100) year += 2000;
+  } else {
+    year = base.getFullYear();
+    if (new Date(year, month, day).getTime() < new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime()) year += 1;
+  }
+  const d = new Date(year, month, day);
+  // Reject impossible dates like 31 Feb (Date would roll them over).
+  if (d.getDate() !== day || d.getMonth() !== month) return null;
+  return d.getTime();
+}
+
+/**
+ * Reads a credit card statement SMS: how much is due and by when.
+ * Returns null for anything else (OTPs, offers, loan reminders, debit card texts).
+ */
+export function parseCardBill(sms: RawSms): CardBill | null {
+  const sender = sms.sender.trim().toUpperCase();
+  if (PERSONAL_SENDER.test(sender.replace(/[\s-]/g, ''))) return null;
+  const text = normalize(sms.body);
+  if (!text || isOtp(text) || !CREDIT_CARD.test(text)) return null;
+  let total: number | null = null;
+  for (const rx of BILL_TOTAL) {
+    const m = rx.exec(text);
+    if (m) {
+      total = toNumber(m[1]);
+      break;
+    }
+  }
+  if (total === null || !Number.isFinite(total) || total <= 0) return null;
+  const account = findAccount(text);
+  if (!account) return null;
+  const min = BILL_MIN.exec(text);
+  const minDue = min ? toNumber(min[1]) : null;
+  return {
+    id: `bill-${sms.id}`,
+    bank: bankFor(sender),
+    account,
+    amountDue: total,
+    minDue: minDue !== null && Number.isFinite(minDue) ? minDue : null,
+    dueDate: parseDueDate(text, sms.date),
+    statementDate: sms.date,
   };
 }

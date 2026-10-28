@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState } from 'react-native';
 
 import { thisMonth, type Month } from './analytics';
-import { demoInbox } from './demo';
+import { demoExtras, demoInbox } from './demo';
 import { keyOf } from './parser';
 import { processInbox } from './pipeline';
 import { checkSmsPermission, readInbox, requestSmsPermission, type SmsPermission } from './sms';
@@ -11,35 +11,53 @@ import {
   CREDIT_CATEGORIES,
   DEBIT_CATEGORIES,
   EMPTY_STATS,
+  type CardBill,
   type CategoryId,
+  type DataSource,
+  type Goal,
+  type PayMode,
   type ScanStats,
   type Txn,
+  type TxnType,
 } from './types';
 
-/** Your own choices, saved on the phone. */
+/**
+ * Everything you create, saved only in this app's private storage on the phone.
+ * Transactions read from SMS are not stored: they are read again from the inbox.
+ */
 type Prefs = {
+  /** null until you finish the welcome screen. */
+  source: DataSource | null;
   /** merchantKey → category. "Always put Swiggy in Food". */
   rules: Record<string, CategoryId>;
   /** txn id → category. A one-off change for a single payment. */
   overrides: Record<string, CategoryId>;
   /** Payments you said should not count. */
   excluded: string[];
-  /** Cash expenses you added by hand. */
+  /** Cash expenses and income you added by hand. */
   manual: Txn[];
-  /** You chose to use the app without SMS reading. */
-  manualOnly: boolean;
+  goals: Goal[];
+  /** Monthly spending limit, or null for none. */
+  budget: number | null;
+  /** Credit card statements you marked as paid (bill ids). */
+  paidBills: string[];
 };
 
-const EMPTY_PREFS: Prefs = { rules: {}, overrides: {}, excluded: [], manual: [], manualOnly: false };
-const STORAGE_KEY = 'kharcha:prefs:v1';
+const EMPTY_PREFS: Prefs = { source: null, rules: {}, overrides: {}, excluded: [], manual: [], goals: [], budget: null, paidBills: [] };
+const STORAGE_KEY = 'kharcha:prefs:v2';
+const LEGACY_KEY = 'kharcha:prefs:v1';
 const AUTO_REFRESH_GAP_MS = 60_000;
-/** Start with `EXPO_PUBLIC_DEMO=1 npx expo start` to see the app with sample data. */
-const DEMO = process.env.EXPO_PUBLIC_DEMO === '1';
+/** `EXPO_PUBLIC_DEMO=1 npx expo start` opens straight into sample data. */
+const FORCE_DEMO = process.env.EXPO_PUBLIC_DEMO === '1';
 
-export type Status = 'booting' | 'needs_permission' | 'loading' | 'ready';
+export type Status = 'booting' | 'onboarding' | 'loading' | 'ready';
+
+export type NewEntry = { type: TxnType; amount: number; merchant: string; category: CategoryId; timestamp: number; note?: string; mode?: PayMode };
+export type GoalInput = Pick<Goal, 'name' | 'target' | 'saved' | 'icon' | 'color' | 'deadline'>;
 
 type Store = {
   status: Status;
+  source: DataSource | null;
   permission: SmsPermission;
   txns: Txn[];
   stats: ScanStats;
@@ -47,15 +65,28 @@ type Store = {
   lastSync: number | null;
   error: string | null;
   refreshing: boolean;
-  manualOnly: boolean;
+  goals: Goal[];
+  budget: number | null;
+  /** Credit card statements read from SMS, newest first. */
+  bills: CardBill[];
+  paidBills: string[];
   setMonth: (m: Month) => void;
   refresh: () => Promise<void>;
   requestAccess: () => Promise<SmsPermission>;
-  continueWithoutSms: () => void;
+  chooseSource: (source: 'manual' | 'demo') => void;
   setCategory: (txn: Txn, category: CategoryId, applyToMerchant: boolean) => void;
   setExcluded: (txn: Txn, excluded: boolean) => void;
-  addManual: (input: { amount: number; merchant: string; category: CategoryId; timestamp: number; note?: string }) => void;
+  addEntry: (input: NewEntry) => void;
   deleteManual: (id: string) => void;
+  saveGoal: (input: GoalInput, id?: string) => void;
+  addToGoal: (id: string, amount: number) => void;
+  deleteGoal: (id: string) => void;
+  setBudget: (amount: number | null) => void;
+  markBillPaid: (billId: string, paid: boolean) => void;
+  /** "This category is right": stops the payment showing in Needs a look. */
+  confirmCategory: (txn: Txn) => void;
+  /** Deletes everything Kharcha saved and returns to the welcome screen. */
+  eraseAll: () => Promise<void>;
   find: (id: string) => Txn | undefined;
 };
 
@@ -79,28 +110,68 @@ function applyPrefs(auto: Txn[], prefs: Prefs): Txn[] {
   return [...fromSms, ...manual].sort((a, b) => b.timestamp - a.timestamp);
 }
 
+async function loadPrefs(): Promise<{ prefs: Prefs; ok: boolean }> {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (raw) return { prefs: { ...EMPTY_PREFS, ...(JSON.parse(raw) as Partial<Prefs>) }, ok: true };
+    const legacy = await AsyncStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      const old = JSON.parse(legacy) as Partial<Prefs> & { manualOnly?: boolean };
+      const { manualOnly, ...rest } = old;
+      return { prefs: { ...EMPTY_PREFS, ...rest, source: manualOnly ? 'manual' : null }, ok: true };
+    }
+    return { prefs: EMPTY_PREFS, ok: true };
+  } catch {
+    // Broken storage should never block the app. Don't save either,
+    // so a one-off read error can't wipe your saved data.
+    return { prefs: EMPTY_PREFS, ok: false };
+  }
+}
+
+function demoState() {
+  const { txns, stats, bills } = processInbox(demoInbox());
+  const extras = demoExtras();
+  const prefs: Prefs = { ...EMPTY_PREFS, source: 'demo', manual: extras.manual, goals: extras.goals, budget: extras.budget };
+  return { txns, stats, bills, prefs };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('booting');
   const [permission, setPermission] = useState<SmsPermission>('denied');
   const [autoTxns, setAutoTxns] = useState<Txn[]>([]);
   const [stats, setStats] = useState<ScanStats>(EMPTY_STATS);
-  const [prefs, setPrefs] = useState<Prefs>(EMPTY_PREFS);
+  const [bills, setBills] = useState<CardBill[]>([]);
+  const [saved, setSaved] = useState<Prefs>(EMPTY_PREFS);
+  // Sample data lives only in memory, so it can never mix with your own.
+  const [demo, setDemo] = useState<Prefs | null>(null);
   const [month, setMonth] = useState<Month>(thisMonth());
   const [lastSync, setLastSync] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const busy = useRef(false);
-  const prefsLoaded = useRef(false);
+  const canSave = useRef(false);
   const statusRef = useRef<Status>('booting');
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
 
-  // Save your choices whenever they change.
+  const prefs = demo ?? saved;
+  const source = prefs.source;
+  const sourceRef = useRef(source);
   useEffect(() => {
-    if (!prefsLoaded.current) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(prefs)).catch(() => {});
-  }, [prefs]);
+    sourceRef.current = source;
+  }, [source]);
+
+  /** Applies a change to whichever data set is showing. */
+  const update = useCallback((fn: (p: Prefs) => Prefs) => {
+    if (sourceRef.current === 'demo') setDemo((d) => (d ? fn(d) : d));
+    else setSaved(fn);
+  }, []);
+
+  useEffect(() => {
+    if (!canSave.current) return;
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(saved)).catch(() => {});
+  }, [saved]);
 
   const scan = useCallback(async () => {
     if (busy.current) return;
@@ -110,9 +181,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const inbox = await readInbox();
       // Let the spinner paint before the parsing work starts.
       await new Promise((r) => setTimeout(r, 0));
-      const { txns, stats: s } = processInbox(inbox.messages, { personal: inbox.personalSkipped });
+      const { txns, stats: s, bills: b } = processInbox(inbox.messages, { personal: inbox.personalSkipped });
       setAutoTxns(txns);
       setStats(s);
+      setBills(b);
       setLastSync(Date.now());
       setError(null);
     } catch (e) {
@@ -124,55 +196,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // First start: load saved choices, then check the permission.
+  const startDemo = useCallback(() => {
+    const d = demoState();
+    setAutoTxns(d.txns);
+    setStats(d.stats);
+    setBills(d.bills);
+    setDemo(d.prefs);
+    setLastSync(Date.now());
+    setStatus('ready');
+  }, []);
+
+  // First start: load saved data, then decide where transactions come from.
   useEffect(() => {
     (async () => {
-      let saved = EMPTY_PREFS;
-      let readOk = true;
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) saved = { ...EMPTY_PREFS, ...(JSON.parse(raw) as Partial<Prefs>) };
-      } catch {
-        // Broken storage should never block the app. Don't save either,
-        // so a one-off read error can't wipe your saved rules.
-        readOk = false;
-      }
-      prefsLoaded.current = readOk;
-      setPrefs(saved);
+      const { prefs: loaded, ok } = await loadPrefs();
+      canSave.current = ok;
+      setSaved(loaded);
 
-      if (DEMO) {
-        // Demo mode: sample bank SMS through the real parser, no permission needed.
-        const { txns, stats: s } = processInbox(demoInbox());
-        setAutoTxns(txns);
-        setStats(s);
-        setPermission('granted');
-        setLastSync(Date.now());
-        setStatus('ready');
+      if (FORCE_DEMO || loaded.source === 'demo') {
+        startDemo();
         return;
       }
-
       const p = await checkSmsPermission();
       setPermission(p);
       if (p === 'granted') {
+        if (loaded.source !== 'sms') setSaved((x) => ({ ...x, source: 'sms' }));
         setStatus('loading');
         await scan();
-      } else if (saved.manualOnly) {
+      } else if (loaded.source) {
+        // SMS was turned off in Settings, or you chose manual entry. Home explains.
         setStatus('ready');
       } else {
-        setStatus('needs_permission');
+        setStatus('onboarding');
       }
     })();
-  }, [scan]);
+  }, [scan, startDemo]);
 
   // Coming back to the app picks up new bank SMS.
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (state) => {
-      if (state !== 'active' || DEMO) return;
+      if (state !== 'active' || sourceRef.current === 'demo') return;
       const p = await checkSmsPermission();
-      setPermission(p);
+      setPermission((prev) => (p === 'denied' && (prev === 'blocked' || prev === 'restricted') ? prev : p));
       if (p !== 'granted') return;
       // You may have just allowed SMS in Settings.
-      if (statusRef.current === 'needs_permission') {
+      if (sourceRef.current !== 'sms') setSaved((x) => ({ ...x, source: 'sms' }));
+      if (statusRef.current === 'onboarding') {
         setStatus('loading');
         scan();
       } else if (!lastSync || Date.now() - lastSync > AUTO_REFRESH_GAP_MS) {
@@ -183,7 +252,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [lastSync, scan]);
 
   const refresh = useCallback(async () => {
-    if (DEMO) return;
+    if (sourceRef.current === 'demo') return;
     const p = await checkSmsPermission();
     setPermission(p);
     if (p === 'granted') await scan();
@@ -193,69 +262,157 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const p = await requestSmsPermission();
     setPermission(p);
     if (p === 'granted') {
-      // Only show the full-screen loader on first setup, not from Home.
-      if (statusRef.current === 'needs_permission') setStatus('loading');
+      setDemo(null);
+      setSaved((x) => ({ ...x, source: 'sms' }));
+      // Only show the full-screen loader during setup, not from Home.
+      if (statusRef.current === 'onboarding') setStatus('loading');
       await scan();
     }
     return p;
   }, [scan]);
 
-  const continueWithoutSms = useCallback(() => {
-    setPrefs((x) => ({ ...x, manualOnly: true }));
-    setStatus('ready');
-  }, []);
-
-  const setCategory = useCallback((txn: Txn, category: CategoryId, applyToMerchant: boolean) => {
-    setPrefs((x) => {
-      if (txn.isManual) {
-        return { ...x, manual: x.manual.map((t) => (t.id === txn.id ? { ...t, category } : t)) };
+  const chooseSource = useCallback(
+    (next: 'manual' | 'demo') => {
+      if (next === 'demo') {
+        // Remember the choice so the next launch opens the sample again.
+        setSaved((x) => ({ ...x, source: 'demo' }));
+        startDemo();
+        return;
       }
-      const overrides = { ...x.overrides };
-      if (applyToMerchant && txn.merchantKey) {
-        delete overrides[txn.id];
-        return { ...x, overrides, rules: { ...x.rules, [txn.merchantKey]: category } };
-      }
-      overrides[txn.id] = category;
-      return { ...x, overrides };
-    });
-  }, []);
+      setDemo(null);
+      setAutoTxns([]);
+      setStats(EMPTY_STATS);
+      setBills([]);
+      setSaved((x) => ({ ...x, source: 'manual' }));
+      setStatus('ready');
+    },
+    [startDemo],
+  );
 
-  const setExcluded = useCallback((txn: Txn, value: boolean) => {
-    setPrefs((x) => {
-      const set = new Set(x.excluded);
-      if (value) set.add(txn.id);
-      else set.delete(txn.id);
-      return { ...x, excluded: [...set] };
-    });
-  }, []);
+  const setCategory = useCallback(
+    (txn: Txn, category: CategoryId, applyToMerchant: boolean) => {
+      update((x) => {
+        if (txn.isManual) {
+          return { ...x, manual: x.manual.map((t) => (t.id === txn.id ? { ...t, category } : t)) };
+        }
+        const overrides = { ...x.overrides };
+        if (applyToMerchant && txn.merchantKey) {
+          delete overrides[txn.id];
+          return { ...x, overrides, rules: { ...x.rules, [txn.merchantKey]: category } };
+        }
+        overrides[txn.id] = category;
+        return { ...x, overrides };
+      });
+    },
+    [update],
+  );
 
-  const addManual: Store['addManual'] = useCallback((input) => {
-    const merchant = input.merchant.trim() || 'Cash expense';
-    const txn: Txn = {
-      id: `cash-${Date.now()}`,
-      amount: input.amount,
-      type: 'debit',
-      merchant,
-      merchantKey: keyOf(merchant),
-      category: input.category,
-      mode: 'cash',
-      bank: null,
-      account: null,
-      timestamp: input.timestamp,
-      isManual: true,
-      excluded: false,
-      categorySource: 'manual',
-      note: input.note,
-    };
-    setPrefs((x) => ({ ...x, manual: [txn, ...x.manual] }));
-  }, []);
+  const setExcluded = useCallback(
+    (txn: Txn, value: boolean) => {
+      update((x) => {
+        const set = new Set(x.excluded);
+        if (value) set.add(txn.id);
+        else set.delete(txn.id);
+        return { ...x, excluded: [...set] };
+      });
+    },
+    [update],
+  );
 
-  const deleteManual = useCallback((id: string) => {
-    setPrefs((x) => ({
-      ...x,
-      manual: x.manual.filter((t) => t.id !== id),
-      excluded: x.excluded.filter((e) => e !== id),
-    }));
+  const addEntry: Store['addEntry'] = useCallback(
+    (input) => {
+      const merchant = input.merchant.trim() || (input.type === 'credit' ? 'Cash received' : 'Cash expense');
+      const txn: Txn = {
+        id: `cash-${Date.now()}`,
+        amount: input.amount,
+        type: input.type,
+        merchant,
+        merchantKey: keyOf(merchant),
+        category: input.category,
+        mode: input.mode ?? 'cash',
+        bank: null,
+        account: null,
+        timestamp: input.timestamp,
+        isManual: true,
+        excluded: false,
+        categorySource: 'manual',
+        note: input.note,
+      };
+      update((x) => ({ ...x, manual: [txn, ...x.manual] }));
+    },
+    [update],
+  );
+
+  const deleteManual = useCallback(
+    (id: string) => {
+      update((x) => ({ ...x, manual: x.manual.filter((t) => t.id !== id), excluded: x.excluded.filter((e) => e !== id) }));
+    },
+    [update],
+  );
+
+  const saveGoal = useCallback(
+    (input: GoalInput, id?: string) => {
+      update((x) => {
+        if (id) return { ...x, goals: x.goals.map((g) => (g.id === id ? { ...g, ...input } : g)) };
+        return { ...x, goals: [...x.goals, { ...input, id: `goal-${Date.now()}`, createdAt: Date.now() }] };
+      });
+    },
+    [update],
+  );
+
+  const addToGoal = useCallback(
+    (id: string, amount: number) => {
+      update((x) => ({ ...x, goals: x.goals.map((g) => (g.id === id ? { ...g, saved: Math.max(0, g.saved + amount) } : g)) }));
+    },
+    [update],
+  );
+
+  const deleteGoal = useCallback(
+    (id: string) => {
+      update((x) => ({ ...x, goals: x.goals.filter((g) => g.id !== id) }));
+    },
+    [update],
+  );
+
+  const setBudget = useCallback(
+    (amount: number | null) => {
+      update((x) => ({ ...x, budget: amount && amount > 0 ? amount : null }));
+    },
+    [update],
+  );
+
+  const markBillPaid = useCallback(
+    (billId: string, paid: boolean) => {
+      update((x) => {
+        const set = new Set(x.paidBills ?? []);
+        if (paid) set.add(billId);
+        else set.delete(billId);
+        return { ...x, paidBills: [...set] };
+      });
+    },
+    [update],
+  );
+
+  const confirmCategory = useCallback(
+    (txn: Txn) => {
+      if (txn.isManual) return;
+      update((x) => ({ ...x, overrides: { ...x.overrides, [txn.id]: txn.category } }));
+    },
+    [update],
+  );
+
+  const eraseAll = useCallback(async () => {
+    await AsyncStorage.multiRemove([STORAGE_KEY, LEGACY_KEY]).catch(() => {});
+    canSave.current = true;
+    setDemo(null);
+    setSaved(EMPTY_PREFS);
+    setAutoTxns([]);
+    setStats(EMPTY_STATS);
+    setBills([]);
+    setLastSync(null);
+    setError(null);
+    setMonth(thisMonth());
+    setStatus('onboarding');
   }, []);
 
   const txns = useMemo(() => applyPrefs(autoTxns, prefs), [autoTxns, prefs]);
@@ -264,6 +421,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: Store = {
     status,
+    source,
     permission,
     txns,
     stats,
@@ -271,15 +429,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     lastSync,
     error,
     refreshing,
-    manualOnly: prefs.manualOnly,
+    goals: prefs.goals,
+    budget: prefs.budget,
+    bills,
+    paidBills: prefs.paidBills ?? [],
     setMonth,
     refresh,
     requestAccess,
-    continueWithoutSms,
+    chooseSource,
     setCategory,
     setExcluded,
-    addManual,
+    addEntry,
     deleteManual,
+    saveGoal,
+    addToGoal,
+    deleteGoal,
+    setBudget,
+    markBillPaid,
+    confirmCategory,
+    eraseAll,
     find,
   };
 

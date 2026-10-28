@@ -1,4 +1,5 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { router, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextProps, type TextStyle, type ViewStyle } from 'react-native';
 
@@ -18,7 +19,7 @@ export function Txt({
     <Text
       {...rest}
       style={[
-        type[variant],
+        type[variant] as TextStyle,
         { color: color ?? p.ink },
         tabular ? { fontVariant: ['tabular-nums'] } : null,
         style as StyleProp<TextStyle>,
@@ -33,36 +34,56 @@ export function Icon({ name, size = 20, color }: { name: IconName; size?: number
 }
 
 /** Section title on the left, optional small link on the right. */
-export function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+export function SectionHeader({
+  title,
+  subtitle,
+  action,
+  onAction,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: string;
+  onAction?: () => void;
+}) {
   const p = usePalette();
   return (
     <View style={styles.sectionHeader}>
-      <Txt variant="heading">{title}</Txt>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Txt variant="heading" accessibilityRole="header">
+          {title}
+        </Txt>
+        {subtitle ? (
+          <Txt variant="small" color={p.muted}>
+            {subtitle}
+          </Txt>
+        ) : null}
+      </View>
       {action && onAction ? (
-        <Pressable onPress={onAction} hitSlop={10} accessibilityRole="button">
-          <Txt variant="smallStrong" color={p.muted}>
+        <Pressable onPress={onAction} hitSlop={12} accessibilityRole="button" style={styles.link}>
+          <Txt variant="smallStrong" color={p.accentInk} numberOfLines={1} style={{ flexShrink: 0 }}>
             {action}
           </Txt>
+          <Icon name="chevron-right" size={16} color={p.accentInk} />
         </Pressable>
       ) : null}
     </View>
   );
 }
 
-/** Round icon tinted with the category colour. */
+/** Round icon tinted with a colour. */
 export function Badge({ icon, color, size = 40 }: { icon: IconName; color: string; size?: number }) {
   return (
     <View
       style={{
         width: size,
         height: size,
-        borderRadius: size / 2,
-        backgroundColor: alpha(color, 0.16),
+        borderRadius: size * 0.32,
+        backgroundColor: alpha(color, 0.15),
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <MaterialCommunityIcons name={icon} size={size * 0.5} color={color} />
+      <MaterialCommunityIcons name={icon} size={size * 0.52} color={color} />
     </View>
   );
 }
@@ -73,40 +94,53 @@ export function Chip({
   onPress,
   color,
   icon,
+  a11y,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
   color?: string;
   icon?: IconName;
+  /** Spoken label, needed when the chip shows only an icon. */
+  a11y?: string;
 }) {
   const p = usePalette();
   const tint = color ?? p.ink;
+  // Plain chips (filters) fill with the accent when picked; coloured ones (categories) get a tint.
+  const solid = selected && !color;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityLabel={a11y ?? label}
       accessibilityState={{ selected }}
-      style={[
+      style={({ pressed }) => [
         styles.chip,
         {
-          backgroundColor: selected ? alpha(tint, 0.14) : p.surface,
-          borderColor: selected ? tint : p.line,
+          backgroundColor: solid ? p.accent : selected ? alpha(tint, 0.16) : p.surface,
+          borderColor: solid ? p.accent : selected ? tint : p.line,
+          opacity: pressed ? 0.7 : 1,
         },
       ]}
     >
-      {icon ? <MaterialCommunityIcons name={icon} size={16} color={selected ? tint : p.muted} /> : null}
-      <Txt variant="smallStrong" color={selected ? p.ink : p.inkSoft}>
-        {label}
-      </Txt>
+      {icon ? <MaterialCommunityIcons name={icon} size={label ? 16 : 20} color={solid ? p.onAccent : selected || !label ? tint : p.muted} /> : null}
+      {label ? (
+        <Txt variant="smallStrong" color={solid ? p.onAccent : selected ? p.ink : p.inkSoft}>
+          {label}
+        </Txt>
+      ) : null}
     </Pressable>
   );
 }
 
-/** A plain block on the page. Used sparingly; most content sits right on the paper. */
-export function Panel({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+/** A raised block on the page. */
+export function Card({ children, style, padded = true }: { children: ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean }) {
   const p = usePalette();
-  return <View style={[styles.panel, { backgroundColor: p.surface, borderColor: p.line }, style]}>{children}</View>;
+  return (
+    <View style={[styles.card, { backgroundColor: p.surface, borderColor: p.line, boxShadow: p.shadowCard }, padded && { padding: space.lg }, style]}>
+      {children}
+    </View>
+  );
 }
 
 export function Button({
@@ -115,44 +149,66 @@ export function Button({
   kind = 'primary',
   icon,
   disabled,
+  compact,
 }: {
   label: string;
   onPress: () => void;
-  kind?: 'primary' | 'quiet';
+  kind?: 'primary' | 'accent' | 'secondary' | 'quiet' | 'danger';
   icon?: IconName;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   const p = usePalette();
-  const primary = kind === 'primary';
+  const look = {
+    primary: { bg: p.ink, fg: p.bg, border: p.ink },
+    accent: { bg: p.accent, fg: p.onAccent, border: p.accent },
+    secondary: { bg: p.surface, fg: p.ink, border: p.line },
+    quiet: { bg: 'transparent', fg: p.ink, border: 'transparent' },
+    danger: { bg: p.dangerSoft, fg: p.danger, border: p.dangerSoft },
+  }[kind];
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       style={({ pressed }) => [
         styles.button,
-        {
-          backgroundColor: primary ? p.ink : 'transparent',
-          opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
-        },
+        compact && styles.buttonCompact,
+        { backgroundColor: look.bg, borderColor: look.border, opacity: disabled ? 0.4 : pressed ? 0.8 : 1 },
       ]}
     >
-      {icon ? <MaterialCommunityIcons name={icon} size={18} color={primary ? p.bg : p.ink} /> : null}
-      <Txt variant="bodyStrong" color={primary ? p.bg : p.ink}>
+      {icon ? <MaterialCommunityIcons name={icon} size={compact ? 16 : 18} color={look.fg} /> : null}
+      <Txt variant={compact ? 'smallStrong' : 'bodyStrong'} color={look.fg}>
         {label}
       </Txt>
     </Pressable>
   );
 }
 
-/** Thin horizontal bar showing a share (0..1). */
-export function ShareBar({ share, color, height = 6 }: { share: number; color: string; height?: number }) {
+export function IconButton({ icon, onPress, label, tint }: { icon: IconName; onPress: () => void; label: string; tint?: string }) {
   const p = usePalette();
   return (
-    <View style={{ height, borderRadius: height / 2, backgroundColor: p.surfaceAlt, overflow: 'hidden' }}>
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.iconButton, { backgroundColor: p.surface, borderColor: p.line, opacity: pressed ? 0.7 : 1 }]}
+    >
+      <Icon name={icon} size={20} color={tint ?? p.ink} />
+    </Pressable>
+  );
+}
+
+/** Thin horizontal bar showing a share (0..1). */
+export function ShareBar({ share, color, height = 6, track }: { share: number; color: string; height?: number; track?: string }) {
+  const p = usePalette();
+  return (
+    <View style={{ height, borderRadius: height / 2, backgroundColor: track ?? p.track, overflow: 'hidden' }}>
       <View
         style={{
-          width: `${Math.max(2, Math.min(100, share * 100))}%`,
+          width: `${Math.max(share > 0 ? 2 : 0, Math.min(100, share * 100))}%`,
           height: '100%',
           borderRadius: height / 2,
           backgroundColor: color,
@@ -162,11 +218,95 @@ export function ShareBar({ share, color, height = 6 }: { share: number; color: s
   );
 }
 
+/** Small rounded label. */
+export function Tag({ label, color, icon }: { label: string; color: string; icon?: IconName }) {
+  return (
+    <View style={[styles.tag, { backgroundColor: alpha(color, 0.14) }]}>
+      {icon ? <MaterialCommunityIcons name={icon} size={12} color={color} /> : null}
+      <Txt variant="tiny" color={color}>
+        {label}
+      </Txt>
+    </View>
+  );
+}
+
+export function Segmented<T extends string>({ options, value, onChange }: { options: { id: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+  const p = usePalette();
+  return (
+    <View style={[styles.segmented, { backgroundColor: p.surface, borderColor: p.line }]} accessibilityRole="tablist">
+      {options.map((o) => {
+        const on = o.id === value;
+        return (
+          <Pressable
+            key={o.id}
+            onPress={() => onChange(o.id)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: on }}
+            style={[styles.segment, on && { backgroundColor: p.accent, borderColor: p.accent }]}
+          >
+            <Txt variant="smallStrong" color={on ? p.onAccent : p.muted}>
+              {o.label}
+            </Txt>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** A tappable row for settings-style lists. */
+export function ListRow({
+  icon,
+  iconColor,
+  title,
+  subtitle,
+  right,
+  onPress,
+  href,
+}: {
+  icon?: IconName;
+  iconColor?: string;
+  title: string;
+  subtitle?: string;
+  right?: ReactNode;
+  onPress?: () => void;
+  href?: Href;
+}) {
+  const p = usePalette();
+  const press = onPress ?? (href ? () => router.push(href) : undefined);
+  return (
+    <Pressable
+      onPress={press}
+      disabled={!press}
+      accessibilityRole={press ? 'button' : undefined}
+      style={({ pressed }) => [styles.listRow, { opacity: pressed ? 0.6 : 1 }]}
+    >
+      {icon ? <Badge icon={icon} color={iconColor ?? p.inkSoft} size={36} /> : null}
+      <View style={{ flex: 1, gap: 2 }}>
+        <Txt variant="bodyStrong">{title}</Txt>
+        {subtitle ? (
+          <Txt variant="small" color={p.muted}>
+            {subtitle}
+          </Txt>
+        ) : null}
+      </View>
+      {right ?? (press ? <Icon name="chevron-right" size={20} color={p.muted} /> : null)}
+    </Pressable>
+  );
+}
+
+export function Divider({ inset = 0 }: { inset?: number }) {
+  const p = usePalette();
+  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: p.line, marginLeft: inset }} />;
+}
+
 export function Empty({ icon, title, body, children }: { icon: IconName; title: string; body: string; children?: ReactNode }) {
   const p = usePalette();
   return (
     <View style={styles.empty}>
-      <Icon name={icon} size={32} color={p.muted} />
+      <View style={[styles.emptyIcon, { backgroundColor: p.surfaceAlt }]}>
+        <Icon name={icon} size={28} color={p.muted} />
+      </View>
       <Txt variant="heading" style={{ textAlign: 'center' }}>
         {title}
       </Txt>
@@ -178,27 +318,176 @@ export function Empty({ icon, title, body, children }: { icon: IconName; title: 
   );
 }
 
+/** Small outlined label for how something was paid: "UPI", "HDFC card ••7788". */
+export function PayBadge({ label, dashed }: { label: string; dashed?: boolean }) {
+  const p = usePalette();
+  return (
+    <View style={[styles.payBadge, { borderColor: p.line, borderStyle: dashed ? 'dashed' : 'solid' }]}>
+      <Txt variant="tiny" color={p.inkSoft} numberOfLines={1}>
+        {label}
+      </Txt>
+    </View>
+  );
+}
+
+/** A label + amount + share on one line, with a bar under it. [fill] is the bar length 0..1. */
+export function AmountBar({
+  label,
+  amount,
+  share,
+  fill,
+  color,
+  onPress,
+  sub,
+}: {
+  label: string;
+  amount: string;
+  share?: string;
+  fill: number;
+  color?: string;
+  onPress?: () => void;
+  sub?: string;
+}) {
+  const p = usePalette();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={`${label}, ${amount}${share ? `, ${share}` : ''}`}
+      style={({ pressed }) => [{ gap: 6, opacity: pressed ? 0.6 : 1 }]}
+    >
+      <View style={styles.amountBarHead}>
+        <Txt variant="body" numberOfLines={1} style={{ flex: 1 }}>
+          {label}
+        </Txt>
+        <Txt variant="bodyStrong" tabular>
+          {amount}
+        </Txt>
+        {share ? (
+          <Txt variant="small" color={p.muted} tabular style={{ minWidth: 36, textAlign: 'right' }}>
+            {share}
+          </Txt>
+        ) : null}
+      </View>
+      <ShareBar share={fill} color={color ?? p.accent} height={8} />
+      {sub ? (
+        <Txt variant="tiny" color={p.muted}>
+          {sub}
+        </Txt>
+      ) : null}
+    </Pressable>
+  );
+}
+
+/** One bar split into parts (payment methods), with gaps between parts. */
+export function MixBar({ parts, height = 16, label }: { parts: { share: number; color: string }[]; height?: number; label: string }) {
+  const shown = parts.filter((x) => x.share > 0.004);
+  if (shown.length === 0) return <View style={{ height }} />;
+  return (
+    <View style={{ flexDirection: 'row', height, gap: 3 }} accessible accessibilityRole="image" accessibilityLabel={label}>
+      {shown.map((x, i) => (
+        <View
+          key={i}
+          style={{
+            flex: x.share,
+            backgroundColor: x.color,
+            borderTopLeftRadius: i === 0 ? 6 : 2,
+            borderBottomLeftRadius: i === 0 ? 6 : 2,
+            borderTopRightRadius: i === shown.length - 1 ? 6 : 2,
+            borderBottomRightRadius: i === shown.length - 1 ? 6 : 2,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** A row you tap to go somewhere: icon, two lines of text, chevron. Used for alerts on Home. */
+export function NoticeRow({
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  body,
+  onPress,
+  tone,
+  badgeText,
+}: {
+  icon?: IconName;
+  iconBg: string;
+  iconColor: string;
+  title: string;
+  body?: string;
+  onPress?: () => void;
+  tone?: { bg: string; border: string };
+  badgeText?: string;
+}) {
+  const p = usePalette();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={`${title}${body ? `. ${body}` : ''}`}
+      style={({ pressed }) => [
+        styles.notice,
+        { backgroundColor: tone?.bg ?? p.surface, borderColor: tone?.border ?? p.line, opacity: pressed ? 0.75 : 1 },
+        !tone && { boxShadow: p.shadowCard },
+      ]}
+    >
+      <View style={[styles.noticeIcon, { backgroundColor: iconBg }]}>
+        {badgeText ? (
+          <Txt variant="bodyStrong" color={iconColor}>
+            {badgeText}
+          </Txt>
+        ) : icon ? (
+          <MaterialCommunityIcons name={icon} size={20} color={iconColor} />
+        ) : null}
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Txt variant="bodyStrong" numberOfLines={2}>
+          {title}
+        </Txt>
+        {body ? (
+          <Txt variant="small" color={p.muted} numberOfLines={2}>
+            {body}
+          </Txt>
+        ) : null}
+      </View>
+      {onPress ? <Icon name="chevron-right" size={20} color={p.muted} /> : null}
+    </Pressable>
+  );
+}
+
+/** The round "add" button floating above the tab bar. */
+export function Fab({ onPress, label }: { onPress: () => void; label: string }) {
+  const p = usePalette();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.fab, { backgroundColor: p.accent, shadowColor: p.ink, opacity: pressed ? 0.85 : 1 }]}
+    >
+      <Icon name="plus" size={28} color={p.onAccent} />
+    </Pressable>
+  );
+}
+
 export const styles = StyleSheet.create({
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: space.md,
-  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space.md, marginBottom: space.md },
+  link: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 32, flexShrink: 0 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    minHeight: 36,
     borderRadius: radius.pill,
     borderWidth: 1,
   },
-  panel: {
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: space.lg,
-  },
+  card: { borderRadius: radius.md + 4, borderWidth: StyleSheet.hairlineWidth },
   button: {
     flexDirection: 'row',
     gap: 8,
@@ -207,12 +496,55 @@ export const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: space.xl,
     borderRadius: radius.pill,
+    borderWidth: 1,
   },
-  empty: {
+  buttonCompact: { minHeight: 40, paddingHorizontal: space.lg },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    gap: space.sm,
-    paddingVertical: space.xxl,
-    paddingHorizontal: space.xl,
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, alignSelf: 'flex-start' },
+  segmented: { flexDirection: 'row', borderRadius: radius.md - 2, padding: 4, gap: 4, borderWidth: StyleSheet.hairlineWidth },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
+  },
+  payBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, maxWidth: 160 },
+  amountBarHead: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    borderRadius: radius.md + 4,
+    borderWidth: 1,
+    padding: space.md + 2,
+  },
+  noticeIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md, minHeight: 56 },
+  empty: { alignItems: 'center', gap: space.sm, paddingVertical: space.xxl, paddingHorizontal: space.xl },
+  emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: space.xs },
+  fab: {
+    position: 'absolute',
+    right: space.lg,
+    bottom: space.lg,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
 });
 

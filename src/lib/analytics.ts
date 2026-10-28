@@ -1,4 +1,4 @@
-import { countsAsIncome, countsAsSpend, type CategoryId, type PayMode, type Txn } from './types';
+import { cat, countsAsIncome, countsAsSaving, countsAsSpend, type CategoryId, type IconName, type PayMode, type Txn } from './types';
 
 /** A month written as { year, month } where month is 0-11 (like JS Date). */
 export type Month = { year: number; month: number };
@@ -56,11 +56,22 @@ export type CategorySlice = { category: CategoryId; amount: number; count: numbe
 export type MerchantStat = { name: string; key: string; amount: number; count: number; category: CategoryId };
 export type ModeStat = { mode: PayMode; amount: number; count: number; share: number };
 
+export type IncomeSource = { name: string; key: string; amount: number; count: number; category: CategoryId; share: number };
+
 export type MonthSummary = {
   month: Month;
   spent: number;
   received: number;
+  /** Put into investments and SIPs. Part of what you saved, not spending. */
+  invested: number;
+  /** received - spent. Negative when you spent more than came in. */
+  saved: number;
+  /** saved / received, or null when nothing came in. */
+  savingsRate: number | null;
   spendCount: number;
+  incomeCount: number;
+  incomeByCategory: CategorySlice[];
+  incomeSources: IncomeSource[];
   byCategory: CategorySlice[];
   /** Day of month (1..31) → amount spent. */
   byDay: Record<number, number>;
@@ -90,7 +101,24 @@ export function summarize(all: Txn[], month: Month): MonthSummary {
   const inMonth = all.filter((t) => sameMonth(monthOf(t.timestamp), month));
   const spends = inMonth.filter(countsAsSpend);
   const spent = sum(spends);
-  const received = sum(inMonth.filter(countsAsIncome));
+  const incomes = inMonth.filter(countsAsIncome);
+  const received = sum(incomes);
+  const invested = sum(inMonth.filter(countsAsSaving));
+  const saved = received - spent;
+
+  const incomeByCategory: CategorySlice[] = [...groupBy(incomes, (t) => t.category)]
+    .map(([category, list]) => {
+      const amount = sum(list);
+      return { category, amount, count: list.length, share: received > 0 ? amount / received : 0 };
+    })
+    .sort((a, b) => b.amount - a.amount);
+
+  const incomeSources: IncomeSource[] = [...groupBy(incomes, (t) => t.merchantKey || t.merchant)]
+    .map(([key, list]) => {
+      const amount = sum(list);
+      return { name: list[0].merchant, key: String(key), amount, count: list.length, category: list[0].category, share: received > 0 ? amount / received : 0 };
+    })
+    .sort((a, b) => b.amount - a.amount);
 
   const byCategory: CategorySlice[] = [...groupBy(spends, (t) => t.category)]
     .map(([category, list]) => {
@@ -132,7 +160,13 @@ export function summarize(all: Txn[], month: Month): MonthSummary {
     month,
     spent,
     received,
+    invested,
+    saved,
+    savingsRate: received > 0 ? saved / received : null,
     spendCount: spends.length,
+    incomeCount: incomes.length,
+    incomeByCategory,
+    incomeSources,
     byCategory,
     byDay,
     byMode,
@@ -156,6 +190,126 @@ export function trend(all: Txn[], end: Month, count = 6): { month: Month; spent:
   for (let back = count - 1; back >= 0; back--) {
     const m = addMonths(end, -back);
     out.push({ month: m, spent: totals.get(monthKey(m)) ?? 0 });
+  }
+  return out;
+}
+
+export type FlowMonth = { month: Month; income: number; spent: number; saved: number; invested: number };
+
+/** Money in, money out and what was left, for [count] months ending at [end], oldest first. */
+export function cashflow(all: Txn[], end: Month, count = 6): FlowMonth[] {
+  const totals = new Map<string, FlowMonth>();
+  const out: FlowMonth[] = [];
+  for (let back = count - 1; back >= 0; back--) {
+    const m = addMonths(end, -back);
+    const row = { month: m, income: 0, spent: 0, saved: 0, invested: 0 };
+    totals.set(monthKey(m), row);
+    out.push(row);
+  }
+  for (const t of all) {
+    const row = totals.get(monthKey(monthOf(t.timestamp)));
+    if (!row) continue;
+    if (countsAsSpend(t)) row.spent += t.amount;
+    else if (countsAsIncome(t)) row.income += t.amount;
+    else if (countsAsSaving(t)) row.invested += t.amount;
+  }
+  for (const row of out) row.saved = row.income - row.spent;
+  return out;
+}
+
+export type Recurring = { name: string; key: string; category: CategoryId; amount: number; months: number; lastTs: number };
+
+/**
+ * Payments to the same place in at least 3 of the last 4 months, for about the
+ * same amount: rent, bills, subscriptions, SIPs.
+ */
+export function recurring(all: Txn[], end: Month): Recurring[] {
+  const window = new Set([0, 1, 2, 3].map((b) => monthKey(addMonths(end, -b))));
+  const byMerchant = groupBy(
+    all.filter((t) => t.type === 'debit' && !t.excluded && (countsAsSpend(t) || countsAsSaving(t)) && window.has(monthKey(monthOf(t.timestamp)))),
+    (t) => t.merchantKey || t.merchant,
+  );
+  const out: Recurring[] = [];
+  for (const [key, list] of byMerchant) {
+    const perMonth = groupBy(list, (t) => monthKey(monthOf(t.timestamp)));
+    if (perMonth.size < 3) continue;
+    // Several payments a month (food delivery, cabs) are habits, not fixed bills.
+    if (list.length > perMonth.size + 1) continue;
+    const amounts = list.map((t) => t.amount);
+    const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+    if (Math.max(...amounts) > avg * 1.4 || Math.min(...amounts) < avg * 0.6) continue;
+    const last = list.reduce((a, t) => (t.timestamp > a.timestamp ? t : a), list[0]);
+    out.push({ name: last.merchant, key: String(key), category: last.category, amount: avg, months: perMonth.size, lastTs: last.timestamp });
+  }
+  return out.sort((a, b) => b.amount - a.amount);
+}
+
+/** How the month is going against a spending budget. */
+export function budgetPace(summary: MonthSummary, budget: number) {
+  const days = daysInMonth(summary.month);
+  const current = sameMonth(summary.month, thisMonth());
+  const projected = current ? (summary.spent / Math.max(1, summary.daysCounted)) * days : summary.spent;
+  const left = budget - summary.spent;
+  const daysLeft = current ? days - summary.daysCounted : 0;
+  return {
+    used: budget > 0 ? summary.spent / budget : 0,
+    left,
+    projected,
+    daysLeft,
+    perDayLeft: daysLeft > 0 && left > 0 ? left / daysLeft : 0,
+    onTrack: projected <= budget,
+  };
+}
+
+export type Insight = { id: string; icon: IconName; tone: 'good' | 'warn' | 'info'; title: string; body: string };
+
+/** A few plain-language facts about the month, most useful first. */
+export function insights(now: MonthSummary, prev: MonthSummary, flow: FlowMonth[]): Insight[] {
+  const out: Insight[] = [];
+  const name = monthShort(now.month);
+  const prevName = monthShort(prev.month);
+  const rupees = (v: number) => `₹${Math.round(v).toLocaleString('en-IN')}`;
+
+  if (now.savingsRate !== null) {
+    const rate = Math.round(now.savingsRate * 100);
+    if (rate >= 20) {
+      out.push({ id: 'rate', icon: 'piggy-bank-outline', tone: 'good', title: `You kept ${rate}% of what came in`, body: `${rupees(now.saved)} left over in ${name}. Saving 20% or more is a strong habit.` });
+    } else if (rate < 0) {
+      out.push({ id: 'rate', icon: 'alert-circle-outline', tone: 'warn', title: `Spent ${rupees(-now.saved)} more than came in`, body: `Money out was higher than money in for ${name}. Check the big categories below.` });
+    } else {
+      out.push({ id: 'rate', icon: 'piggy-bank-outline', tone: 'info', title: `You kept ${rate}% of your income`, body: `${rupees(now.saved)} left over so far in ${name}.` });
+    }
+  }
+
+  const prevBy = new Map(prev.byCategory.map((c) => [c.category, c.amount]));
+  let rise: { c: CategoryId; diff: number; pct: number } | null = null;
+  let drop: { c: CategoryId; diff: number; pct: number } | null = null;
+  for (const c of now.byCategory) {
+    const before = prevBy.get(c.category) ?? 0;
+    if (before < 500) continue;
+    const diff = c.amount - before;
+    const pct = (diff / before) * 100;
+    if (diff > 0 && pct >= 15 && (!rise || diff > rise.diff)) rise = { c: c.category, diff, pct };
+    if (diff < 0 && pct <= -15 && (!drop || diff < drop.diff)) drop = { c: c.category, diff, pct };
+  }
+  if (rise) out.push({ id: 'rise', icon: 'trending-up', tone: 'warn', title: `${cat(rise.c).label} is up ${Math.round(rise.pct)}%`, body: `${rupees(rise.diff)} more than in ${prevName}.` });
+  if (drop) out.push({ id: 'drop', icon: 'trending-down', tone: 'good', title: `${cat(drop.c).label} is down ${Math.round(-drop.pct)}%`, body: `${rupees(-drop.diff)} less than in ${prevName}. Nice.` });
+
+  const top = now.byCategory[0];
+  if (top && now.spent > 0) {
+    out.push({ id: 'top', icon: cat(top.category).icon, tone: 'info', title: `${cat(top.category).label} takes ${Math.round(top.share * 100)}% of spending`, body: `${rupees(top.amount)} across ${top.count} ${top.count === 1 ? 'payment' : 'payments'}.` });
+  }
+
+  const past = flow.slice(0, -1).filter((f) => f.income > 0);
+  if (past.length >= 2 && now.received > 0) {
+    const avgIncome = past.reduce((a, f) => a + f.income, 0) / past.length;
+    if (now.received > avgIncome * 1.1) {
+      out.push({ id: 'income', icon: 'cash-plus', tone: 'good', title: 'More money came in than usual', body: `${rupees(now.received - avgIncome)} above your ${past.length}-month average.` });
+    }
+  }
+
+  if (now.invested > 0) {
+    out.push({ id: 'invested', icon: 'chart-line', tone: 'good', title: `${rupees(now.invested)} went into investments`, body: 'SIPs and investments count as savings here, not spending.' });
   }
   return out;
 }

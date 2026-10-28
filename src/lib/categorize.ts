@@ -118,9 +118,20 @@ export function categoryFromMerchant(merchant: string): CategoryId | null {
 }
 
 /** "Ramesh Kumar" style: 2-3 plain words, letters only. */
+/** Words that mark a shop or company, never a person ("Shree Balaji Agencies", "Razorpay Payments"). */
+const BUSINESS_WORD = new Set([
+  'payments', 'payment', 'pay', 'pvt', 'private', 'ltd', 'limited', 'llp', 'inc', 'corp', 'co', 'company', 'agencies', 'agency',
+  'enterprises', 'enterprise', 'traders', 'trading', 'store', 'stores', 'mart', 'merchant', 'merchants', 'services', 'service',
+  'technologies', 'technology', 'tech', 'solutions', 'industries', 'foods', 'food', 'restaurant', 'cafe', 'hotel', 'medical',
+  'medicals', 'pharma', 'pharmacy', 'chemist', 'hospital', 'clinic', 'retail', 'india', 'centre', 'center', 'shop', 'bazaar',
+  'bazar', 'collections', 'motors', 'electronics', 'mobiles', 'garments', 'textiles', 'sweets', 'bakery', 'kirana', 'general',
+  'provisions', 'automobiles', 'station', 'petroleum', 'fuels', 'jewellers', 'opticals', 'salon', 'studio', 'academy', 'school',
+]);
+
 function looksLikePersonName(name: string): boolean {
   const words = name.trim().split(' ').filter(Boolean);
   if (words.length < 2 || words.length > 3) return false;
+  if (words.some((w) => BUSINESS_WORD.has(w.toLowerCase()))) return false;
   return words.every((w) => w.length >= 2 && w.length <= 14 && /^[A-Za-z]+$/.test(w));
 }
 
