@@ -7,12 +7,13 @@ import { MonthSwitcher, TxnRow } from '../../components/finance';
 import { Chip, Empty, Icon, Txt } from '../../components/ui';
 import { needsReview, payGroupOf, payLabel } from '../../lib/accounts';
 import { dateKey, dayLabel, monthOf, monthShort, sameMonth } from '../../lib/analytics';
-import { inr } from '../../lib/money';
+import { currencyOf, inHome, type CurrencyCode } from '../../lib/currency';
+import { money } from '../../lib/money';
 import { useStore } from '../../lib/store';
-import { cat, countsAsIncome, countsAsSaving, countsAsSpend, type Txn } from '../../lib/types';
+import { cat, countsAsIncome, countsAsSaving, countsAsSpend, isForeign, type Txn } from '../../lib/types';
 import { fonts, radius, space, usePalette } from '../../theme';
 
-type Filter = 'all' | 'spent' | 'income' | 'upi' | 'card' | 'cash' | 'review' | 'not_counted';
+type Filter = 'all' | 'spent' | 'income' | 'upi' | 'card' | 'cash' | 'review' | 'not_counted' | 'foreign';
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -23,7 +24,16 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'cash', label: 'Cash' },
   { id: 'review', label: 'Needs a look' },
   { id: 'not_counted', label: 'Not counted' },
+  // Only shown when the month has payments in another currency.
+  { id: 'foreign', label: 'Other currencies' },
 ];
+
+/** "$1,314.99 · €12.50", biggest count first. Never adds different currencies together. */
+function perCurrency(list: Txn[]): string {
+  const sums = new Map<CurrencyCode, number>();
+  for (const t of list) sums.set(currencyOf(t), (sums.get(currencyOf(t)) ?? 0) + t.amount);
+  return [...sums].map(([c, v]) => money(v, { currency: c })).join(' · ');
+}
 
 const isFilter = (v: unknown): v is Filter => FILTERS.some((f) => f.id === v);
 
@@ -40,7 +50,11 @@ function matches(t: Txn, f: Filter): boolean {
     case 'review':
       return needsReview(t);
     case 'not_counted':
+      // Other currencies have their own filter; here it means "left out on purpose".
+      if (isForeign(t)) return false;
       return t.type === 'debit' ? !countsAsSpend(t) && !countsAsSaving(t) : !countsAsIncome(t);
+    case 'foreign':
+      return isForeign(t);
     default:
       return true;
   }
@@ -98,9 +112,27 @@ export default function Activity() {
 
   const total = useMemo(() => {
     const incomeView = filter === 'income';
-    const counted = list.filter(incomeView ? countsAsIncome : filter === 'not_counted' || filter === 'review' ? () => true : countsAsSpend);
-    return { amount: counted.reduce((a, t) => a + t.amount, 0), count: list.length };
+    // Only add up payments in the home currency; other currencies get their own line.
+    const counted = list.filter(incomeView ? countsAsIncome : filter === 'not_counted' || filter === 'review' ? inHome : countsAsSpend);
+    const foreign = list.filter(isForeign);
+    return {
+      amount: counted.reduce((a, t) => a + t.amount, 0),
+      count: list.length,
+      text: filter === 'foreign' ? perCurrency(foreign) : money(counted.reduce((a, t) => a + t.amount, 0)),
+    };
   }, [list, filter]);
+  const hasForeign = useMemo(() => inMonth.some(isForeign), [inMonth]);
+  // Hide filters that can't match anything this month (no UPI in the US, no foreign payments...).
+  const filters = FILTERS.filter((f) => {
+    if (f.id === filter || f.id === 'all' || f.id === 'spent' || f.id === 'income') return true;
+    if (f.id === 'foreign') return hasForeign;
+    return inMonth.some((t) => matches(t, f.id));
+  });
+  // A filter opened from another screen can sit off-screen in the chip row; bring it next to "All".
+  if (filter !== 'all') {
+    const i = filters.findIndex((f) => f.id === filter);
+    if (i > 1) filters.splice(1, 0, ...filters.splice(i, 1));
+  }
 
   const label = FILTERS.find((f) => f.id === filter)?.label ?? 'All';
   const totalTitle =
@@ -136,7 +168,7 @@ export default function Activity() {
 
       <View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {FILTERS.map((f) => (
+          {filters.map((f) => (
             <Chip key={f.id} label={f.label} selected={filter === f.id} onPress={() => setFilter(f.id)} />
           ))}
         </ScrollView>
@@ -152,7 +184,7 @@ export default function Activity() {
         }
         ListHeaderComponent={
           list.length > 0 ? (
-            <View style={[styles.total, { backgroundColor: p.surface, borderColor: p.line }]} accessible accessibilityLabel={`${totalTitle}: ${inr(total.amount)}, ${total.count} payments`}>
+            <View style={[styles.total, { backgroundColor: p.surface, borderColor: p.line }]} accessible accessibilityLabel={`${totalTitle}: ${total.text}, ${total.count} ${total.count === 1 ? 'payment' : 'payments'}`}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Txt variant="small" color={p.muted}>
                   {totalTitle}
@@ -161,8 +193,16 @@ export default function Activity() {
                   {total.count} {total.count === 1 ? 'payment' : 'payments'}
                 </Txt>
               </View>
-              <Txt variant="amount" tabular color={filter === 'income' ? p.income : p.ink}>
-                {inr(total.amount)}
+              <Txt
+                variant="amount"
+                tabular
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+                color={filter === 'income' ? p.income : p.ink}
+                style={{ flexShrink: 1, maxWidth: '62%', textAlign: 'right' }}
+              >
+                {total.text}
               </Txt>
             </View>
           ) : undefined
@@ -172,7 +212,7 @@ export default function Activity() {
             <Txt variant="smallStrong">{section.title}</Txt>
             {section.spent > 0 ? (
               <Txt variant="small" color={p.muted} tabular>
-                {inr(section.spent)} spent
+                {money(section.spent)} spent
               </Txt>
             ) : null}
           </View>

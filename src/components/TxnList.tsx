@@ -3,7 +3,7 @@ import { SectionList, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { dateKey, dayLabel } from '../lib/analytics';
-import { inr } from '../lib/money';
+import { money } from '../lib/money';
 import { countsAsSpend, type Txn } from '../lib/types';
 import { space, usePalette } from '../theme';
 import { TxnRow } from './finance';
@@ -44,7 +44,7 @@ export function TxnList({ txns, header, showDayHeaders = true }: { txns: Txn[]; 
             </Txt>
             {section.spent > 0 ? (
               <Txt variant="smallStrong" color={p.muted} tabular>
-                {inr(section.spent)}
+                {money(section.spent)}
               </Txt>
             ) : null}
           </View>

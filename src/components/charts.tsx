@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 
 import { monthShort, type FlowMonth } from '../lib/analytics';
-import { inr, inrCompact } from '../lib/money';
+import { money, moneyCompact } from '../lib/money';
 import { alpha, space, usePalette } from '../theme';
 import { Txt } from './ui';
 
@@ -132,7 +132,7 @@ export function CashflowBars({
               disabled={!onSelect}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
-              accessibilityLabel={`${monthShort(d.month)}: ${inr(d.income)} in, ${inr(d.spent)} out`}
+              accessibilityLabel={`${monthShort(d.month)}: ${money(d.income)} in, ${money(d.spent)} out`}
               style={[styles.flowCol, on && { backgroundColor: alpha(p.ink, 0.05) }]}
             >
               <View style={[styles.pair, { height }]}>
@@ -198,7 +198,7 @@ export function LegendItem({ color, label, value }: { color: string; label: stri
       </Txt>
       {value !== undefined ? (
         <Txt variant="smallStrong" tabular>
-          {inrCompact(value)}
+          {moneyCompact(value)}
         </Txt>
       ) : null}
     </View>

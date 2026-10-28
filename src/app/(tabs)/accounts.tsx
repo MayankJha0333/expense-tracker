@@ -16,7 +16,7 @@ import {
   type Instrument,
 } from '../../lib/accounts';
 import { monthOf, monthShort, sameMonth } from '../../lib/analytics';
-import { inr, percent } from '../../lib/money';
+import { money, percent } from '../../lib/money';
 import { useStore } from '../../lib/store';
 import type { IconName } from '../../lib/types';
 import { radius, space, usePalette } from '../../theme';
@@ -64,7 +64,7 @@ export default function Accounts() {
       </View>
 
       <View>
-        <SectionHeader title="How you paid" subtitle={total > 0 ? `${inr(total)} spent in ${monthShort(month)}` : undefined} />
+        <SectionHeader title="How you paid" subtitle={total > 0 ? `${money(total)} spent in ${monthShort(month)}` : undefined} />
         {mix.length === 0 ? (
           <Card>
             <Empty icon="credit-card-off-outline" title={`No spending in ${monthShort(month)}`} body="Pick another month with the arrows." />
@@ -95,15 +95,15 @@ export default function Accounts() {
                 disabled={!(m.group === 'upi' || m.group === 'card' || m.group === 'cash')}
                 onPress={() => router.navigate({ pathname: '/activity', params: { filter: m.group } })}
                 accessibilityRole="button"
-                accessibilityLabel={`${PAY_GROUP_LABEL[m.group]}: ${inr(m.amount)}, ${percent(m.share)}, ${m.count} payments`}
+                accessibilityLabel={`${PAY_GROUP_LABEL[m.group]}: ${money(m.amount)}, ${percent(m.share)}, ${m.count} payments`}
                 style={[styles.tableRow, i < mix.length - 1 && { borderBottomColor: p.line, borderBottomWidth: StyleSheet.hairlineWidth }]}
               >
                 <View style={styles.methodCell}>
                   <View style={[styles.swatch, { backgroundColor: p.series[payGroupColorIndex(m.group)] }]} />
                   <Txt variant="bodyStrong">{PAY_GROUP_LABEL[m.group]}</Txt>
                 </View>
-                <Txt variant="bodyStrong" tabular style={styles.cAmount}>
-                  {inr(m.amount)}
+                <Txt variant="bodyStrong" tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={styles.cAmount}>
+                  {money(m.amount)}
                 </Txt>
                 <Txt variant="small" color={p.muted} tabular style={styles.cSmall}>
                   {percent(m.share)}
@@ -118,7 +118,7 @@ export default function Accounts() {
       </View>
 
       <View>
-        <SectionHeader title="Credit cards" subtitle={toPay > 0 ? `${inr(toPay)} to pay` : creditCards.length ? 'All bills paid' : undefined} />
+        <SectionHeader title="Credit cards" subtitle={toPay > 0 ? `${money(toPay)} to pay` : creditCards.length ? 'All bills paid' : undefined} />
         {creditCards.length === 0 ? (
           <Card>
             <Txt variant="small" color={p.muted}>
@@ -191,7 +191,7 @@ function InstrumentCard({ item, due, monthLabel }: { item: Instrument; due?: Car
     <Pressable
       onPress={() => router.push(`/account/${encodeURIComponent(item.key)}`)}
       accessibilityRole="button"
-      accessibilityLabel={`${item.name}. Spent ${inr(item.spent)} in ${monthLabel}.${line ? ` ${line.text}.` : ''}`}
+      accessibilityLabel={`${item.name}. Spent ${money(item.spent)} in ${monthLabel}.${line ? ` ${line.text}.` : ''}`}
       style={({ pressed }) => [styles.cardBox, { backgroundColor: p.surface, borderColor: p.line, opacity: pressed ? 0.8 : 1 }]}
     >
       <View style={styles.cardHead}>
@@ -201,7 +201,7 @@ function InstrumentCard({ item, due, monthLabel }: { item: Instrument; due?: Car
             {item.name}
           </Txt>
           <Txt variant="small" color={p.muted}>
-            Spent in {monthLabel}: {inr(item.spent)}
+            Spent in {monthLabel}: {money(item.spent)}
             {item.spendCount ? ` · ${item.spendCount} ${item.spendCount === 1 ? 'payment' : 'payments'}` : ''}
           </Txt>
         </View>
@@ -224,7 +224,7 @@ function InstrumentRow({ item, icon }: { item: Instrument; icon: IconName }) {
     <Pressable
       onPress={() => router.push(`/account/${encodeURIComponent(item.key)}`)}
       accessibilityRole="button"
-      accessibilityLabel={`${item.name}. In ${inr(item.received)}, spent ${inr(item.spent)}.`}
+      accessibilityLabel={`${item.name}. In ${money(item.received)}, spent ${money(item.spent)}.`}
       style={({ pressed }) => [styles.instRow, { opacity: pressed ? 0.6 : 1 }]}
     >
       <View style={[styles.instIcon, { backgroundColor: p.surfaceAlt }]}>
@@ -241,11 +241,11 @@ function InstrumentRow({ item, icon }: { item: Instrument; icon: IconName }) {
       <View style={{ alignItems: 'flex-end', gap: 2 }}>
         {item.received > 0 ? (
           <Txt variant="smallStrong" color={p.income} tabular>
-            In {inr(item.received)}
+            In {money(item.received)}
           </Txt>
         ) : null}
         <Txt variant="small" color={p.muted} tabular>
-          Spent {inr(item.spent)}
+          Spent {money(item.spent)}
         </Txt>
       </View>
     </Pressable>

@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Badge, Button, Card, Chip, Txt } from '../components/ui';
 import { goalPlan } from '../lib/goals';
-import { inr } from '../lib/money';
+import { monthYear } from '../lib/analytics';
+import { currencySymbol, money } from '../lib/money';
 import { useStore } from '../lib/store';
 import type { IconName } from '../lib/types';
 import { fonts, radius, space, usePalette } from '../theme';
@@ -99,7 +100,7 @@ export default function GoalScreen() {
               <Badge icon={existing.icon} color={existing.color} size={44} />
               <View style={{ flex: 1 }}>
                 <Txt variant="amount" tabular>
-                  {inr(existing.saved)}
+                  {money(existing.saved)}
                 </Txt>
                 <Txt variant="small" color={p.muted}>
                   {goalPlan(existing)}
@@ -141,7 +142,7 @@ export default function GoalScreen() {
 
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
-            <Field label="Target (₹)">
+            <Field label={`Target (${currencySymbol()})`}>
               <TextInput
                 value={targetText}
                 onChangeText={(t) => setTargetText(t.replace(/[^0-9.,]/g, ''))}
@@ -153,7 +154,7 @@ export default function GoalScreen() {
             </Field>
           </View>
           <View style={{ flex: 1 }}>
-            <Field label="Saved so far (₹)">
+            <Field label={`Saved so far (${currencySymbol()})`}>
               <TextInput
                 value={savedText}
                 onChangeText={(t) => setSavedText(t.replace(/[^0-9.,]/g, ''))}
@@ -169,7 +170,7 @@ export default function GoalScreen() {
         <Field label="Reach it in">
           <View style={styles.wrap}>
             {existing?.deadline && months === null ? (
-              <Chip label={new Date(existing.deadline).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })} selected onPress={() => {}} />
+              <Chip label={monthYear(existing.deadline)} selected onPress={() => {}} />
             ) : null}
             {DEADLINES.map((d) => (
               <Chip

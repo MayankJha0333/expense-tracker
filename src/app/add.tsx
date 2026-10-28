@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Button, Chip, Segmented, Txt } from '../components/ui';
 import { categoryFromMerchant } from '../lib/categorize';
+import { CURRENCIES, getHomeCurrency } from '../lib/currency';
+import { currencySymbol } from '../lib/money';
 import { useStore } from '../lib/store';
 import { CREDIT_CATEGORIES, DEBIT_CATEGORIES, type CategoryId, type IconName, type PayMode, type TxnType } from '../lib/types';
 import { fonts, radius, space, usePalette } from '../theme';
@@ -92,7 +94,8 @@ export default function AddEntry() {
 
         <View style={styles.amountRow}>
           <Txt variant="display" color={valid ? (income ? p.income : p.ink) : p.muted}>
-            {income ? '+₹' : '₹'}
+            {income ? '+' : ''}
+            {currencySymbol()}
           </Txt>
           <TextInput
             value={amountText}
@@ -102,7 +105,7 @@ export default function AddEntry() {
             keyboardType="decimal-pad"
             autoFocus
             style={[styles.amountInput, { color: income ? p.income : p.ink }]}
-            accessibilityLabel="Amount in rupees"
+            accessibilityLabel={`Amount in ${CURRENCIES[getHomeCurrency()].name}s`}
           />
         </View>
 
@@ -113,7 +116,13 @@ export default function AddEntry() {
           <TextInput
             value={what}
             onChangeText={onWhat}
-            placeholder={income ? 'Freelance work, gift, rent from tenant…' : 'Chai, auto, vegetables…'}
+            placeholder={
+              income
+                ? 'Freelance work, gift, rent from tenant…'
+                : getHomeCurrency() === 'INR'
+                  ? 'Chai, auto, vegetables…'
+                  : 'Coffee, taxi, groceries…'
+            }
             placeholderTextColor={p.muted}
             style={[styles.textInput, { color: p.ink, backgroundColor: p.surface, borderColor: p.line }]}
           />
@@ -124,7 +133,8 @@ export default function AddEntry() {
             {income ? 'Received as' : 'Paid with'}
           </Txt>
           <View style={styles.wrap}>
-            {PAY_WITH.filter((m) => !income || m.id !== 'card').map((m) => (
+            {/* UPI is an Indian thing; elsewhere it's cash or card. */}
+            {PAY_WITH.filter((m) => (!income || m.id !== 'card') && (m.id !== 'upi' || getHomeCurrency() === 'INR')).map((m) => (
               <Chip key={m.id} label={m.label} icon={m.icon} selected={mode === m.id} onPress={() => setMode(m.id)} />
             ))}
           </View>

@@ -1,3 +1,5 @@
+import { monthFirstDates } from './currency';
+import { money } from './money';
 import { cat, countsAsIncome, countsAsSaving, countsAsSpend, type CategoryId, type IconName, type PayMode, type Txn } from './types';
 
 /** A month written as { year, month } where month is 0-11 (like JS Date). */
@@ -28,6 +30,19 @@ const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const monthName = (m: Month) => `${MONTHS[m.month]} ${m.year}`;
 export const monthShort = (m: Month) => MONTHS_SHORT[m.month];
 
+/** "15 Nov" or "Nov 15" (US). [long] gives "15 November". */
+export function shortDay(ts: number, long = false): string {
+  const d = new Date(ts);
+  const mon = (long ? MONTHS : MONTHS_SHORT)[d.getMonth()];
+  return monthFirstDates() ? `${mon} ${d.getDate()}` : `${d.getDate()} ${mon}`;
+}
+
+/** "Nov 2026". */
+export const monthYear = (ts: number) => {
+  const d = new Date(ts);
+  return `${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+};
+
 /** "Today", "Yesterday", or "Sat, 24 Oct". */
 export function dayLabel(ts: number): string {
   const d = new Date(ts);
@@ -36,7 +51,7 @@ export function dayLabel(ts: number): string {
   const diff = Math.round((start(today) - start(d)) / 86_400_000);
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
-  const base = `${DAYS_SHORT[d.getDay()]}, ${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+  const base = `${DAYS_SHORT[d.getDay()]}, ${shortDay(ts)}`;
   return d.getFullYear() === today.getFullYear() ? base : `${base} ${d.getFullYear()}`;
 }
 
@@ -268,7 +283,7 @@ export function insights(now: MonthSummary, prev: MonthSummary, flow: FlowMonth[
   const out: Insight[] = [];
   const name = monthShort(now.month);
   const prevName = monthShort(prev.month);
-  const rupees = (v: number) => `₹${Math.round(v).toLocaleString('en-IN')}`;
+  const rupees = (v: number) => money(v, { decimals: false });
 
   if (now.savingsRate !== null) {
     const rate = Math.round(now.savingsRate * 100);

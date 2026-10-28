@@ -6,7 +6,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { TxnList } from '../../components/TxnList';
 import { Txt } from '../../components/ui';
 import { dateKey, dayLabel } from '../../lib/analytics';
-import { inr } from '../../lib/money';
+import { money } from '../../lib/money';
 import { useStore } from '../../lib/store';
 import { countsAsSpend } from '../../lib/types';
 import { space, usePalette } from '../../theme';
@@ -34,7 +34,7 @@ export default function DayScreen() {
               {dayLabel(ts)}
             </Txt>
             <Txt variant="display" tabular>
-              {inr(spent)}
+              {money(spent)}
             </Txt>
             <Txt variant="small" color={p.muted}>
               spent across {list.filter(countsAsSpend).length} payments

@@ -7,7 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SmsNotice } from '../components/SmsNotice';
-import { Button, Card, Divider, Icon, ListRow, SectionHeader, Segmented, Tag, Txt } from '../components/ui';
+import { Button, Card, Chip, Divider, Icon, ListRow, SectionHeader, Segmented, Tag, Txt } from '../components/ui';
+import { CURRENCIES, CURRENCY_CODES } from '../lib/currency';
+import type { SampleKind } from '../lib/demo';
 import { runPrivacyChecks, type CheckState, type PrivacyCheck } from '../lib/offline';
 import { installInfo, smsSupported } from '../lib/sms';
 import { useStore } from '../lib/store';
@@ -80,6 +82,8 @@ export default function Settings() {
       </Txt>
 
       <Appearance />
+
+      <CurrencySection />
 
       <View style={[styles.hero, { backgroundColor: p.card }]}>
         <View style={styles.heroHead}>
@@ -247,6 +251,68 @@ function Appearance() {
   );
 }
 
+const SAMPLE_LABEL: Record<SampleKind, string> = { india: 'India (₹)', us: 'US ($)', stress: 'Stress test' };
+
+/** Which currency totals use. Auto follows your payments; other currencies are listed but never added up. */
+function CurrencySection() {
+  const p = usePalette();
+  const { currency, currencySetting, autoCurrency, setCurrencySetting, source, sample, setSample } = useStore();
+  const tap = () => Haptics.selectionAsync().catch(() => {});
+  const info = CURRENCIES[currency];
+  return (
+    <View>
+      <SectionHeader title="Currency" subtitle={`Totals are in ${info.symbol.trim()} ${info.name}${currencySetting === 'auto' ? ' (auto)' : ''}`} />
+      <Card style={{ gap: space.md }}>
+        <View style={styles.chipWrap}>
+          <Chip
+            label={`Auto · ${CURRENCIES[autoCurrency].symbol.trim()}`}
+            a11y={`Auto, now ${CURRENCIES[autoCurrency].name}`}
+            selected={currencySetting === 'auto'}
+            onPress={() => {
+              tap();
+              setCurrencySetting('auto');
+            }}
+          />
+          {CURRENCY_CODES.map((code) => (
+            <Chip
+              key={code}
+              label={CURRENCIES[code].symbol.trim() === code ? code : `${CURRENCIES[code].symbol.trim()} ${code}`}
+              a11y={CURRENCIES[code].name}
+              selected={currencySetting === code}
+              onPress={() => {
+                tap();
+                setCurrencySetting(code);
+              }}
+            />
+          ))}
+        </View>
+        <Txt variant="small" color={p.muted}>
+          Auto uses the currency most of your payments are in. Payments in other currencies still show in your lists, but they are not added to totals, because Kharcha has no exchange rates offline.
+        </Txt>
+        {__DEV__ && source === 'demo' ? (
+          <View style={{ gap: space.sm }}>
+            <Txt variant="smallStrong">Sample data (development build only)</Txt>
+            <View style={styles.chipWrap}>
+              {(['india', 'us', 'stress'] as const).map((k) => (
+                <Chip
+                  key={k}
+                  label={SAMPLE_LABEL[k]}
+                  a11y={`Sample ${SAMPLE_LABEL[k]}`}
+                  selected={sample === k}
+                  onPress={() => {
+                    tap();
+                    setSample(k);
+                  }}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
+      </Card>
+    </View>
+  );
+}
+
 function SwatchRow<T extends string>({
   title,
   family,
@@ -344,6 +410,7 @@ function Count({ value, label }: { value: number; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   hero: { borderRadius: radius.lg, padding: space.xl },
   heroHead: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   shield: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

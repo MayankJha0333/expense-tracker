@@ -3,7 +3,17 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState } from 'react-native';
 
 import { thisMonth, type Month } from './analytics';
-import { demoExtras, demoInbox } from './demo';
+import {
+  currencyForLocale,
+  getHomeCurrency,
+  isCurrencyCode,
+  pickHomeCurrency,
+  setHomeCurrency,
+  type CurrencyCode,
+  type CurrencySetting,
+} from './currency';
+import { demoExtras, demoInbox, SAMPLE_KINDS, type SampleKind } from './demo';
+import { deviceLocale } from './deviceLocale';
 import { keyOf } from './parser';
 import { processInbox } from './pipeline';
 import { checkSmsPermission, readInbox, requestSmsPermission, type SmsPermission } from './sms';
@@ -46,18 +56,41 @@ type Prefs = {
 const EMPTY_PREFS: Prefs = { source: null, rules: {}, overrides: {}, excluded: [], manual: [], goals: [], budget: null, paidBills: [] };
 const STORAGE_KEY = 'kharcha:prefs:v2';
 const LEGACY_KEY = 'kharcha:prefs:v1';
+/** Kept apart from prefs so the choice also holds while you look at sample data. */
+const CURRENCY_KEY = 'kharcha:currency:v1';
+const SAMPLE_KEY = 'kharcha:sample:v1';
 const AUTO_REFRESH_GAP_MS = 60_000;
 /** `EXPO_PUBLIC_DEMO=1 npx expo start` opens straight into sample data. */
 const FORCE_DEMO = process.env.EXPO_PUBLIC_DEMO === '1';
 
 export type Status = 'booting' | 'onboarding' | 'loading' | 'ready';
 
-export type NewEntry = { type: TxnType; amount: number; merchant: string; category: CategoryId; timestamp: number; note?: string; mode?: PayMode };
+export type NewEntry = {
+  type: TxnType;
+  amount: number;
+  merchant: string;
+  category: CategoryId;
+  timestamp: number;
+  note?: string;
+  mode?: PayMode;
+  /** Leave out for the home currency. */
+  currency?: CurrencyCode;
+};
 export type GoalInput = Pick<Goal, 'name' | 'target' | 'saved' | 'icon' | 'color' | 'deadline'>;
 
 type Store = {
   status: Status;
   source: DataSource | null;
+  /** Totals are in this currency. */
+  currency: CurrencyCode;
+  /** What you picked in Settings ("auto" = follow your payments). */
+  currencySetting: CurrencySetting;
+  /** What "auto" would pick right now. */
+  autoCurrency: CurrencyCode;
+  setCurrencySetting: (s: CurrencySetting) => void;
+  /** Which sample data set is showing (when source is demo). */
+  sample: SampleKind;
+  setSample: (kind: SampleKind) => void;
   permission: SmsPermission;
   txns: Txn[];
   stats: ScanStats;
@@ -128,9 +161,10 @@ async function loadPrefs(): Promise<{ prefs: Prefs; ok: boolean }> {
   }
 }
 
-function demoState() {
-  const { txns, stats, bills } = processInbox(demoInbox());
-  const extras = demoExtras();
+function demoState(kind: SampleKind) {
+  const now = Date.now();
+  const { txns, stats, bills } = processInbox(demoInbox(now, kind));
+  const extras = demoExtras(now, kind);
   const prefs: Prefs = { ...EMPTY_PREFS, source: 'demo', manual: extras.manual, goals: extras.goals, budget: extras.budget };
   return { txns, stats, bills, prefs };
 }
@@ -148,6 +182,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [lastSync, setLastSync] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [currencySetting, setCurrencySettingState] = useState<CurrencySetting>('auto');
+  const locale = useMemo(() => deviceLocale(), []);
+  // Sample data follows the phone's region: dollars in the US, rupees elsewhere.
+  const [sample, setSampleState] = useState<SampleKind>(() => (currencyForLocale(locale) === 'USD' ? 'us' : 'india'));
+  const sampleRef = useRef(sample);
   const busy = useRef(false);
   const canSave = useRef(false);
   const statusRef = useRef<Status>('booting');
@@ -197,7 +236,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startDemo = useCallback(() => {
-    const d = demoState();
+    const d = demoState(sampleRef.current);
     setAutoTxns(d.txns);
     setStats(d.stats);
     setBills(d.bills);
@@ -212,6 +251,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { prefs: loaded, ok } = await loadPrefs();
       canSave.current = ok;
       setSaved(loaded);
+      try {
+        const [[, cur], [, smp]] = await AsyncStorage.multiGet([CURRENCY_KEY, SAMPLE_KEY]);
+        if (cur === 'auto' || isCurrencyCode(cur)) setCurrencySettingState(cur);
+        if (smp && (SAMPLE_KINDS as string[]).includes(smp)) {
+          sampleRef.current = smp as SampleKind;
+          setSampleState(smp as SampleKind);
+        }
+      } catch {
+        // Keep the defaults.
+      }
 
       if (FORCE_DEMO || loaded.source === 'demo') {
         startDemo();
@@ -337,6 +386,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         excluded: false,
         categorySource: 'manual',
         note: input.note,
+        currency: input.currency ?? getHomeCurrency(),
       };
       update((x) => ({ ...x, manual: [txn, ...x.manual] }));
     },
@@ -402,7 +452,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const eraseAll = useCallback(async () => {
-    await AsyncStorage.multiRemove([STORAGE_KEY, LEGACY_KEY]).catch(() => {});
+    await AsyncStorage.multiRemove([STORAGE_KEY, LEGACY_KEY, CURRENCY_KEY, SAMPLE_KEY]).catch(() => {});
+    setCurrencySettingState('auto');
     canSave.current = true;
     setDemo(null);
     setSaved(EMPTY_PREFS);
@@ -416,12 +467,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const txns = useMemo(() => applyPrefs(autoTxns, prefs), [autoTxns, prefs]);
+  const autoCurrency = useMemo(() => pickHomeCurrency('auto', txns, locale), [txns, locale]);
+  const currency: CurrencyCode = currencySetting === 'auto' ? autoCurrency : currencySetting;
+  // Formatting and totals read this; set it before any screen renders.
+  setHomeCurrency(currency);
+
+  const setCurrencySetting = useCallback((next: CurrencySetting) => {
+    setCurrencySettingState(next);
+    AsyncStorage.setItem(CURRENCY_KEY, next).catch(() => {});
+  }, []);
+
+  const setSample = useCallback(
+    (kind: SampleKind) => {
+      sampleRef.current = kind;
+      setSampleState(kind);
+      AsyncStorage.setItem(SAMPLE_KEY, kind).catch(() => {});
+      if (sourceRef.current === 'demo') startDemo();
+    },
+    [startDemo],
+  );
   const byId = useMemo(() => new Map(txns.map((t) => [t.id, t])), [txns]);
   const find = useCallback((id: string) => byId.get(id), [byId]);
 
   const value: Store = {
     status,
     source,
+    currency,
+    currencySetting,
+    autoCurrency,
+    setCurrencySetting,
+    sample,
+    setSample,
     permission,
     txns,
     stats,

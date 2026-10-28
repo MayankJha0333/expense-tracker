@@ -2,29 +2,30 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { needsReview, payLabel, type CardDue } from '../lib/accounts';
-import { addMonths, daysInMonth, isAfter, monthName, monthShort, sameMonth, thisMonth, timeLabel, type Month } from '../lib/analytics';
-import { inr, inrCompact, percent } from '../lib/money';
-import { cat, countsAsIncome, countsAsSaving, countsAsSpend, type CategoryId, type Txn } from '../lib/types';
+import { addMonths, daysInMonth, isAfter, monthName, monthShort, sameMonth, shortDay, thisMonth, timeLabel, type Month } from '../lib/analytics';
+import { money, moneyCompact, percent } from '../lib/money';
+import { currencyOf } from '../lib/currency';
+import { cat, countsAsIncome, countsAsSaving, countsAsSpend, isForeign, type CategoryId, type Txn } from '../lib/types';
 import { alpha, radius, space, usePalette, type Palette } from '../theme';
 import { Badge, Icon, PayBadge, ShareBar, Txt } from './ui';
 
-const shortDate = (ts: number) => new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+const shortDate = (ts: number) => shortDay(ts);
 
 /** One line about a credit card bill: what's left, when it's due, or that it's paid. */
 export function billLine(due: CardDue, p: Palette): { text: string; color: string; bg: string } {
   const dateText = due.bill.dueDate ? shortDate(due.bill.dueDate) : null;
   if (due.status === 'paid') {
-    return { text: `Bill of ${inr(due.bill.amountDue)} paid`, color: p.income, bg: p.incomeSoft };
+    return { text: `Bill of ${money(due.bill.amountDue)} paid`, color: p.income, bg: p.incomeSoft };
   }
   if (due.status === 'overdue') {
     const late = due.daysLeft !== null ? -due.daysLeft : 0;
-    return { text: `${inr(due.left)} overdue · ${late} ${late === 1 ? 'day' : 'days'} late`, color: p.danger, bg: p.dangerSoft };
+    return { text: `${money(due.left)} overdue · ${late} ${late === 1 ? 'day' : 'days'} late`, color: p.danger, bg: p.dangerSoft };
   }
   const days = due.daysLeft;
   const when = dateText ? ` · due ${dateText}${days !== null ? (days === 0 ? ' · today' : ` · ${days} ${days === 1 ? 'day' : 'days'}`) : ''}` : '';
   const soon = days !== null && days <= 3;
   return {
-    text: `${due.status === 'partly_paid' ? `${inr(due.left)} left of ${inr(due.bill.amountDue)}` : `Bill ${inr(due.left)}`}${when}`,
+    text: `${due.status === 'partly_paid' ? `${money(due.left)} left of ${money(due.bill.amountDue)}` : `Bill ${money(due.left)}`}${when}`,
     color: soon ? p.warn : p.ink,
     bg: soon ? p.warnSoft : p.surfaceAlt,
   };
@@ -35,10 +36,14 @@ export function TxnRow({ txn, showDate }: { txn: Txn; showDate?: boolean }) {
   const p = usePalette();
   const c = cat(txn.category);
   const credit = txn.type === 'credit';
-  const counted = countsAsSpend(txn) || countsAsIncome(txn) || countsAsSaving(txn);
+  // Another currency: shown as it is, but not added to totals (that's not the same as "left out").
+  const foreign = isForeign(txn);
+  const code = currencyOf(txn);
+  const counted = foreign ? !txn.excluded : countsAsSpend(txn) || countsAsIncome(txn) || countsAsSaving(txn);
   const review = needsReview(txn);
+  const amountText = money(txn.amount, { currency: code, decimals: txn.amount < 100 ? true : undefined });
   const when = showDate
-    ? new Date(txn.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+    ? shortDay(txn.timestamp)
     : timeLabel(txn.timestamp);
   const pay = payLabel(txn);
   const label = counted ? c.label : 'Not counted';
@@ -46,7 +51,7 @@ export function TxnRow({ txn, showDate }: { txn: Txn; showDate?: boolean }) {
     <Pressable
       onPress={() => router.push(`/txn/${txn.id}`)}
       accessibilityRole="button"
-      accessibilityLabel={`${txn.merchant}, ${credit ? 'received' : 'paid'} ${inr(txn.amount)}, ${label}, ${pay}${review ? ', needs a look' : ''}`}
+      accessibilityLabel={`${txn.merchant}, ${credit ? 'received' : 'paid'} ${amountText}${foreign ? `, in ${code}, not in totals` : ''}, ${label}, ${pay}${review ? ', needs a look' : ''}`}
       style={({ pressed }) => [styles.row, { opacity: pressed ? 0.6 : counted ? 1 : 0.62 }]}
     >
       <Badge icon={counted ? c.icon : 'swap-horizontal'} color={counted ? c.color : p.muted} />
@@ -60,17 +65,21 @@ export function TxnRow({ txn, showDate }: { txn: Txn; showDate?: boolean }) {
             {label}
           </Txt>
           <PayBadge label={pay} dashed={!counted} />
+          {foreign ? <PayBadge label={code} dashed /> : null}
         </View>
       </View>
-      <View style={{ alignItems: 'flex-end', gap: 3 }}>
+      <View style={{ alignItems: 'flex-end', gap: 3, maxWidth: '48%', flexShrink: 0 }}>
         <Txt
           variant="bodyStrong"
           tabular
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
           color={!counted ? p.muted : credit ? p.income : p.ink}
           style={!counted ? { textDecorationLine: 'line-through' } : null}
         >
           {credit ? '+' : ''}
-          {inr(txn.amount, { decimals: txn.amount < 100 })}
+          {amountText}
         </Txt>
         <Txt variant="tiny" color={p.muted} numberOfLines={1}>
           {when}
@@ -200,7 +209,7 @@ export function HeatCalendar({ month, byDay }: { month: Month; byDay: Record<num
                 key={di}
                 disabled={future}
                 onPress={() => router.push(`/day/${dateKey}`)}
-                accessibilityLabel={`${day} ${monthShort(month)}, ${amt > 0 ? inr(amt) + ' spent' : 'no spending'}`}
+                accessibilityLabel={`${day} ${monthShort(month)}, ${amt > 0 ? money(amt) + ' spent' : 'no spending'}`}
                 style={[
                   styles.cell,
                   styles.cellBox,
@@ -275,7 +284,7 @@ export function CategoryRow({
             {c.label}
           </Txt>
           <Txt variant="bodyStrong" tabular>
-            {inr(amount)}
+            {money(amount)}
           </Txt>
         </View>
         <ShareBar share={share} color={c.color} />
@@ -286,7 +295,7 @@ export function CategoryRow({
           {change != null && Math.abs(change) >= 1 ? (
             <Txt variant="tiny" color={change > 0 ? p.danger : p.income}>
               {change > 0 ? '↑ ' : '↓ '}
-              {inrCompact(Math.abs(change))} vs last month
+              {moneyCompact(Math.abs(change))} vs last month
             </Txt>
           ) : null}
         </View>
@@ -322,10 +331,10 @@ export function Bars({
             onPress={() => onSelect?.(i)}
             disabled={!onSelect}
             style={{ flex: 1, alignItems: 'center', gap: 6 }}
-            accessibilityLabel={`${d.label}: ${inr(d.value)}`}
+            accessibilityLabel={`${d.label}: ${money(d.value)}`}
           >
             <Txt variant="tiny" color={active ? p.ink : p.muted} numberOfLines={1}>
-              {d.value > 0 ? inrCompact(d.value) : ''}
+              {d.value > 0 ? moneyCompact(d.value) : ''}
             </Txt>
             <View
               style={{

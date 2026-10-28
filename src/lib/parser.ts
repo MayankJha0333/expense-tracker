@@ -1,3 +1,10 @@
+import {
+  CURRENCY_CODE_AFTER_SOURCE,
+  CURRENCY_TOKEN_SOURCE,
+  currencyFromToken,
+  parseAmountText,
+  type CurrencyCode,
+} from './currency';
 import type { CardBill, PayMode, SkipReason, TxnType } from './types';
 
 /** One SMS as it comes from the phone's inbox. */
@@ -6,6 +13,8 @@ export type RawSms = { id: string; sender: string; body: string; date: number };
 /** What we could read out of one bank SMS. */
 export type ParsedTxn = {
   amount: number;
+  /** Null when the SMS gave a number with no currency sign or code. */
+  currency: CurrencyCode | null;
   type: TxnType;
   merchant: string;
   merchantKey: string;
@@ -19,7 +28,8 @@ export type ParsedTxn = {
 export type ParseResult = { ok: true; txn: ParsedTxn } | { ok: false; reason: SkipReason };
 
 /*
- * Turns Indian bank / card / UPI SMS into transactions.
+ * Turns bank / card / UPI SMS into transactions. Built for Indian banks; also reads
+ * plain card alerts in other currencies ("A $25.00 transaction ... card ending in 1234").
  *
  * Order of checks (cheapest and safest first):
  * 1. Personal numbers (+91...) are never read.
@@ -64,21 +74,26 @@ const REQUEST = /\b(has requested|have requested|requested (money|rs|inr|payment
 const PROMO = /\b(offer|offers|apply now|pre-?approved|click here|t&c|limited (time|period)|congratulations|you have won|you've won|voucher|coupon|discount|get up ?to|lucky|eligible for|avail now|insta ?loan|personal loan|credit limit|upgrade now|hurry|exclusive|kyc)\b|\d+% off/i;
 
 // ---------- transaction signals ----------
-const DEBIT_VERB = /\b(debited|debit of|debit by|spent|paid|sent|withdrawn|withdrawal|purchase|purchased|deducted|charged|txn of|transaction of|used for|used at|for using|transferred|transfer of|payment of)\b/i;
+const DEBIT_VERB = /\b(debited|debit of|debit by|spent|paid|sent|withdrawn|withdrawal|purchase|purchased|deducted|charged|txn of|transaction of|transaction was made|used for|used at|for using|transferred|transfer of|payment of)\b/i;
 const CREDIT_VERB = /payment of.{0,50}?\b(received|credited)\b|\b(credited|received|deposited|refund|refunded|reversed|reversal|cashback|added to)\b/i;
 
 const MONEY_MOVED = /\b(debited|credited|spent|sent|received|withdrawn|paid|deducted|transferred|refunded)\b/i;
 
-const AMOUNT = /(?:\brs\.?|\binr|₹|\brupees)\s*:?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/gi;
+/** A number as banks write it: 1,234.56 · 1,00,000 · 1.234,56 · 12,50. */
+const NUMBER = String.raw`[0-9](?:[0-9.,]*[0-9])?`;
+/** "Rs.500", "INR 1,234.00", "$25.00", "US$ 12", "€12,50". */
+const AMOUNT = new RegExp(String.raw`(${CURRENCY_TOKEN_SOURCE})\s*:?\s*(${NUMBER})`, 'gi');
+/** "12.50 USD", "1,234.00 INR". */
+const AMOUNT_CODE_AFTER = new RegExp(String.raw`\b(${NUMBER})\s*(${CURRENCY_CODE_AFTER_SOURCE})`, 'gi');
 const AMOUNT_AFTER_VERB = /\b(?:debited|credited|deducted)\s+(?:by|with|for)\s+([0-9][0-9,]*(?:\.[0-9]{1,2})?)\b/i;
 const BALANCE_CONTEXT = /(bal|avl|available|limit|lmt|outstanding|due)/i;
 
 const MASKED_ACCT = /[xX*]{2,}\s?(\d{3,6})\b/;
-const NAMED_ACCT = /\b(?:a\/?c|acct|account|card)\b(?:\s*no\.?)?(?:\s*ending(?:\s*with)?)?\s*[:.\-]?\s*[xX*]*\s?(\d{3,6})\b/i;
+const NAMED_ACCT = /\b(?:a\/?c|acct|account|card)\b(?:\s*no\.?)?(?:\s*ending(?:\s*(?:with|in))?)?\s*[:.\-]?\s*[xX*]*\s?(\d{3,6})\b/i;
 
 const ATM = /\b(atm|cash withdrawal|withdrawn|cash wdl)\b/i;
 const UPI = /\b(upi|vpa)\b|[a-z0-9._-]+@[a-z]{2,}/i;
-const CARD = /\bcard\b/i;
+const CARD = /\bcard\b(?!\s+services)/i;
 const NET = /\b(neft|imps|rtgs|net ?banking|nach|ecs)\b/i;
 const WALLET = /\b(wallet|paytm balance|amazon pay balance)\b/i;
 const P2A = /\bp2a\b/i;
@@ -148,6 +163,17 @@ export function bankFor(sender: string): string | null {
   return hit ? hit[1] : null;
 }
 
+/** Banks that send from short codes (US) start the message with their name: "Chase: A $25.00 …". */
+const TEXT_BANKS: [RegExp, string][] = [
+  [/^chase\b/i, 'Chase'], [/^(bofa|bank of america)\b/i, 'Bank of America'], [/^wells fargo\b/i, 'Wells Fargo'],
+  [/^capital ?one\b/i, 'Capital One'], [/^(amex|american express)\b/i, 'Amex'], [/^discover\b/i, 'Discover'],
+  [/^citi(bank)?\b/i, 'Citi'], [/^us ?bank\b/i, 'US Bank'],
+];
+
+export function bankFromText(text: string): string | null {
+  return TEXT_BANKS.find(([rx]) => rx.test(text.trim()))?.[1] ?? null;
+}
+
 export function isOtp(text: string): boolean {
   for (const rx of OTP_PATTERNS) {
     for (const m of matchAll(rx, text)) {
@@ -159,22 +185,33 @@ export function isOtp(text: string): boolean {
   return false;
 }
 
-export function findAmount(text: string): number | null {
+export type FoundMoney = { amount: number; currency: CurrencyCode | null };
+
+/** The paid amount and its currency. Skips balances and limits ("Avl Bal Rs 5,000"). */
+export function findMoney(text: string): FoundMoney | null {
+  const hits: { index: number; end: number; num: string; cur: CurrencyCode | null }[] = [];
+  for (const m of matchAll(AMOUNT, text)) hits.push({ index: m.index, end: m.index + m[0].length, num: m[2], cur: currencyFromToken(m[1]) });
+  for (const m of matchAll(AMOUNT_CODE_AFTER, text)) hits.push({ index: m.index, end: m.index + m[0].length, num: m[1], cur: currencyFromToken(m[2]) });
+  hits.sort((a, b) => a.index - b.index);
   let prevEnd = 0;
-  for (const m of matchAll(AMOUNT, text)) {
-    const windowStart = Math.max(prevEnd, m.index - 28);
-    const before = text.slice(windowStart, m.index);
-    prevEnd = m.index + m[0].length;
+  for (const h of hits) {
+    if (h.index < prevEnd) continue; // overlaps the one before ("Rs 500 INR")
+    const before = text.slice(Math.max(prevEnd, h.index - 28), h.index);
+    prevEnd = h.end;
     if (BALANCE_CONTEXT.test(before)) continue;
-    const value = parseFloat(m[1].replace(/,/g, '').replace(/\.$/, ''));
-    if (Number.isFinite(value) && value > 0) return value;
+    const value = parseAmountText(h.num, h.cur);
+    if (Number.isFinite(value) && value > 0) return { amount: value, currency: h.cur };
   }
   const v = AMOUNT_AFTER_VERB.exec(text);
   if (v) {
     const value = parseFloat(v[1].replace(/,/g, ''));
-    if (Number.isFinite(value)) return value;
+    if (Number.isFinite(value) && value > 0) return { amount: value, currency: null };
   }
   return null;
+}
+
+export function findAmount(text: string): number | null {
+  return findMoney(text)?.amount ?? null;
 }
 
 export function findAccount(text: string): string | null {
@@ -237,7 +274,8 @@ function titleCase(s: string): string {
     .split(' ')
     .map((w) =>
       // Short codes without vowels stay in capitals: KFC, PVR, SBI. "PAY" becomes "Pay".
-      w.length <= 4 && /^[A-Za-z]+$/.test(w) && !/[aeiou]/i.test(w)
+      // "Y" counts as a vowel in 4-letter words, so LYFT reads "Lyft" but KFC stays KFC.
+      w.length <= 4 && /^[A-Za-z]+$/.test(w) && !/[aeiou]/i.test(w) && !(w.length === 4 && /y/i.test(w))
         ? w.toUpperCase()
         : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
     )
@@ -296,7 +334,9 @@ export function parseSms(sms: RawSms): ParseResult {
   if (REMINDER.test(text)) return { ok: false, reason: 'reminder' };
 
   const account = findAccount(text);
-  const bank = bankFor(sender);
+  // An Indian sender header ("AD-HDFCBK") also tells us the money is in rupees.
+  const senderBank = bankFor(sender);
+  const bank = senderBank ?? bankFromText(text);
   // Offers often mention your card too, so a promo word is enough unless money clearly moved.
   if (PROMO.test(text) && (account === null || !MONEY_MOVED.test(text))) return { ok: false, reason: 'promo' };
 
@@ -308,8 +348,11 @@ export function parseSms(sms: RawSms): ParseResult {
   // A real bank alert names an account / card, or comes from a known bank or wallet.
   if (account === null && bank === null) return { ok: false, reason: 'not_transaction' };
 
-  const amount = findAmount(text);
-  if (amount === null || amount <= 0) return { ok: false, reason: 'not_transaction' };
+  const found = findMoney(text);
+  if (found === null || found.amount <= 0) return { ok: false, reason: 'not_transaction' };
+  const amount = found.amount;
+  // No sign or code in the SMS: an Indian bank means rupees, anything else uses the home currency.
+  const currency = found.currency ?? (senderBank ? 'INR' : null);
 
   const mode = findMode(text);
   const raw = findMerchant(text, type) ?? merchantFromLines(sms.body);
@@ -320,28 +363,38 @@ export function parseSms(sms: RawSms): ParseResult {
 
   return {
     ok: true,
-    txn: { amount, type, merchant, merchantKey: keyOf(merchant), mode, bank, account, personLike },
+    txn: { amount, currency, type, merchant, merchantKey: keyOf(merchant), mode, bank, account, personLike },
   };
 }
 
 // ---------- credit card statements ----------
 const CREDIT_CARD = /\bcredit\s*card\b|\bcc\b|\bsbi\s*card\b|\bonecard\b/i;
-const NUM = String.raw`([0-9][0-9,]*(?:\.[0-9]{1,2})?)`;
-const CUR = String.raw`(?:rs\.?|inr|₹)`;
+const NUM = String.raw`([0-9](?:[0-9.,]*[0-9])?)`;
+const CUR = CURRENCY_TOKEN_SOURCE;
 const BILL_TOTAL = [
-  new RegExp(String.raw`\b(?:total\s+(?:amount\s+|amt\.?\s+)?due|total\s+amt\.?\s+due|amount\s+due|amt\.?\s+due|statement\s+(?:balance|amount)|total\s+outstanding|outstanding\s+amount)\b[^0-9₹]{0,24}?(?:${CUR})?\s*:?\s*${NUM}`, 'i'),
+  new RegExp(String.raw`\b(?:total\s+(?:amount\s+|amt\.?\s+)?due|total\s+amt\.?\s+due|amount\s+due|amt\.?\s+due|statement\s+(?:balance|amount)|total\s+outstanding|outstanding\s+amount)\b[^0-9₹$€£¥]{0,24}?(?:${CUR})?\s*:?\s*${NUM}`, 'i'),
   new RegExp(String.raw`${CUR}\s*${NUM}\s+(?:is\s+)?(?:due|payable)\b`, 'i'),
 ];
-const BILL_MIN = new RegExp(String.raw`\bmin(?:imum)?\.?\s+(?:amount\s+|amt\.?\s+)?due\b[^0-9₹]{0,16}?(?:${CUR})?\s*:?\s*${NUM}`, 'i');
+const BILL_MIN = new RegExp(String.raw`\bmin(?:imum)?\.?\s+(?:amount\s+|amt\.?\s+)?due\b[^0-9₹$€£¥]{0,16}?(?:${CUR})?\s*:?\s*${NUM}`, 'i');
 const BILL_DATE =
   /\b(?:due\s+(?:date|by|on)|pay(?:able)?\s+by|due|by)\b\s*(?:is|:|-|of)?\s*(?:on\s+)?(\d{1,2})(?![0-9,])(?:st|nd|rd|th)?[\s\-/.]*([A-Za-z]{3,9}|\d{1,2})(?:[\s\-/.,]+(\d{2,4}))?/i;
 const MONTH_INDEX: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 
-const toNumber = (s: string) => parseFloat(s.replace(/,/g, ''));
+/** The first currency named in a message, or null. */
+export function currencyIn(text: string): CurrencyCode | null {
+  const m = new RegExp(String.raw`(${CURRENCY_TOKEN_SOURCE})\s*:?\s*${NUMBER}`, 'i').exec(text) ?? new RegExp(String.raw`${NUMBER}\s*(${CURRENCY_CODE_AFTER_SOURCE})`, 'i').exec(text);
+  return m ? currencyFromToken(m[1]) : null;
+}
 
 /** "15-Oct-26", "05/11/2026", "5th Nov" → midnight of that day. A missing year means the next one after the statement. */
+/** "due by Nov 15, 2026", "Payment due date Nov 15" (month first). */
+const BILL_DATE_MONTH_FIRST =
+  /\b(?:due\s+(?:date|by|on)|pay(?:able)?\s+by|due|by)\b\s*(?:is|:|-|of)?\s*(?:on\s+)?([A-Za-z]{3,9})\.?\s+(\d{1,2})(?![0-9])(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?/i;
+
 export function parseDueDate(text: string, statementDate: number): number | null {
-  const m = BILL_DATE.exec(text);
+  let m = BILL_DATE.exec(text);
+  const mf = m ? null : BILL_DATE_MONTH_FIRST.exec(text);
+  if (mf && MONTH_INDEX[mf[1].toLowerCase().slice(0, 3)] !== undefined) m = [mf[0], mf[2], mf[1], mf[3]] as unknown as RegExpExecArray;
   if (!m) return null;
   const day = Number(m[1]);
   const monthRaw = m[2].toLowerCase();
@@ -371,6 +424,10 @@ export function parseCardBill(sms: RawSms): CardBill | null {
   if (PERSONAL_SENDER.test(sender.replace(/[\s-]/g, ''))) return null;
   const text = normalize(sms.body);
   if (!text || isOtp(text) || !CREDIT_CARD.test(text)) return null;
+  const senderBank = bankFor(sender);
+  const bank = senderBank ?? bankFromText(text);
+  const currency = currencyIn(text) ?? (senderBank ? 'INR' : null);
+  const toNumber = (raw: string) => parseAmountText(raw, currency);
   let total: number | null = null;
   for (const rx of BILL_TOTAL) {
     const m = rx.exec(text);
@@ -386,9 +443,10 @@ export function parseCardBill(sms: RawSms): CardBill | null {
   const minDue = min ? toNumber(min[1]) : null;
   return {
     id: `bill-${sms.id}`,
-    bank: bankFor(sender),
+    bank,
     account,
     amountDue: total,
+    ...(currency ? { currency } : {}),
     minDue: minDue !== null && Number.isFinite(minDue) ? minDue : null,
     dueDate: parseDueDate(text, sms.date),
     statementDate: sms.date,

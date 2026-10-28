@@ -1,4 +1,5 @@
 import { monthOf, sameMonth, type Month } from './analytics';
+import { inHome } from './currency';
 import { cat, countsAsIncome, countsAsSpend, type CardBill, type CategoryId, type PayMode, type Txn } from './types';
 
 /*
@@ -209,17 +210,19 @@ export function daysUntil(dueDate: number, now: number): number {
  * - the card sent a "payment received" alert after the statement (adds up partial payments),
  * - a card bill payment left a bank account for about the same amount (within 1%),
  * - you marked it as paid.
+ * Only bills in the home currency are listed, so "₹21,130 to pay" never mixes currencies.
  */
 export function cardDues(bills: CardBill[], txns: Txn[], markedPaid: ReadonlySet<string>, now = Date.now()): CardDue[] {
   const latest = new Map<string, CardBill>();
   for (const b of bills) {
+    if (!inHome(b)) continue;
     const k = billKey(b);
     const prev = latest.get(k);
     if (!prev || b.statementDate > prev.statementDate) latest.set(k, b);
   }
   const out: CardDue[] = [];
   for (const [key, bill] of latest) {
-    const after = txns.filter((t) => t.timestamp >= bill.statementDate && !t.excluded);
+    const after = txns.filter((t) => t.timestamp >= bill.statementDate && !t.excluded && inHome(t));
     const onCard = after.filter((t) => t.mode === 'card' && t.account === bill.account);
     const paidOnCard = onCard.filter((t) => t.type === 'credit' && t.category === 'card_bill').reduce((a, t) => a + t.amount, 0);
     const tolerance = Math.max(1, bill.amountDue * 0.01);
@@ -296,7 +299,8 @@ export type NotCountedRow = { reason: NotCountedReason; amount: number; count: n
 export function notCountedIncome(txns: Txn[]): { total: number; rows: NotCountedRow[] } {
   const rows = new Map<NotCountedReason, NotCountedRow>();
   for (const t of txns) {
-    if (t.type !== 'credit' || countsAsIncome(t)) continue;
+    // Other currencies can't be added to this total; they have their own place in Activity.
+    if (t.type !== 'credit' || countsAsIncome(t) || !inHome(t)) continue;
     const reason: NotCountedReason = t.excluded
       ? 'excluded'
       : t.category === 'self_transfer'

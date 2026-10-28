@@ -1,5 +1,10 @@
+import type { CurrencyCode } from './currency';
 import type { RawSms } from './parser';
 import type { Goal, Txn } from './types';
+
+/** Which sample to show. "us" is in dollars; "stress" is the India sample plus extreme values (dev builds). */
+export type SampleKind = 'india' | 'us' | 'stress';
+export const SAMPLE_KINDS: SampleKind[] = ['india', 'us', 'stress'];
 
 /*
  * Sample data for "Explore with sample data" (and EXPO_PUBLIC_DEMO=1).
@@ -159,7 +164,8 @@ const NOISE: { sender: string; body: string }[] = [
 
 const DAYS_BACK = 200;
 
-export function demoInbox(now = Date.now()): RawSms[] {
+export function demoInbox(now = Date.now(), kind: SampleKind = 'india'): RawSms[] {
+  if (kind === 'us') return demoInboxUS(now);
   const r = seeded(20261028);
   const out: RawSms[] = [];
   let id = 1;
@@ -218,6 +224,13 @@ export function demoInbox(now = Date.now()): RawSms[] {
       }
     }
 
+    // A foreign subscription billed in dollars: shown in lists, left out of rupee totals.
+    if (dom === 7) {
+      const d = new Date(day);
+      d.setHours(7, 30, 0, 0);
+      push(d, { sender: 'AD-HDFCBK', body: `Spent USD 15.00 On HDFC Bank Card 7788 At FIGMA On ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}:07:30:00.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 7788 to 7308080808` });
+    }
+
     // One trip, about two and a half months ago.
     if (back === 75) {
       push(at(day, 19), SMS.hdfcCard(8450, 'MAKEMYTRIP', day, r), 'hdfcCard', 8450);
@@ -241,22 +254,161 @@ export function demoInbox(now = Date.now()): RawSms[] {
   return out;
 }
 
+
+/* ------------------------------------------------------------------ */
+/* US sample, in dollars. Short-code senders, "Chase: …" style texts.  */
+/* ------------------------------------------------------------------ */
+
+const usd = (n: number) => {
+  const [whole, cents] = n.toFixed(2).split('.');
+  return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${cents}`;
+};
+const mdy = (d: Date) => `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${yy(d)}`;
+const LONG_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthFirst = (d: Date) => `${LONG_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+
+type UsTemplate = (amt: number, who: string, d: Date) => { sender: string; body: string };
+const US: Record<string, UsTemplate> = {
+  chaseCard: (amt, at, d) => ({ sender: '24273', body: `Chase: A $${usd(amt)} transaction was made on your Sapphire card ending in 4417 at ${at} on ${mdy(d)}. Not you? Call 1-800-432-3117.` }),
+  amexCard: (amt, at, d) => ({ sender: '263966', body: `Amex: Your card ending in 1009 was charged $${usd(amt)} at ${at} on ${mdy(d)}.` }),
+  bofaDebit: (amt, at, d) => ({ sender: '73981', body: `BofA: Purchase of $${usd(amt)} at ${at} on debit card ending in 2210 on ${mdy(d)}.` }),
+  bofaPay: (amt, to) => ({ sender: '73981', body: `BofA: Online payment of $${usd(amt)} to ${to} from checking account ending in 2210.` }),
+  zelleSent: (amt, to) => ({ sender: '73981', body: `BofA: You sent $${usd(amt)} to ${to} via Zelle from checking account ending in 2210.` }),
+  zelleReceived: (amt, from) => ({ sender: '73981', body: `BofA: Zelle payment of $${usd(amt)} received from ${from}. Checking account ending in 2210.` }),
+  payroll: (amt, from, d) => ({ sender: '73981', body: `BofA: Direct deposit of $${usd(amt)} received from ${from} on ${mdy(d)}. Checking account ending in 2210.` }),
+  atm: (amt) => ({ sender: '73981', body: `BofA: ATM withdrawal of $${usd(amt)} from checking account ending in 2210.` }),
+  refund: (amt, from) => ({ sender: '24273', body: `Chase: You received a $${usd(amt)} refund from ${from} on your card ending in 4417.` }),
+  chaseStatement: (amt, _w, d) => ({
+    sender: '24273',
+    body: `Chase: Your Sapphire credit card ending in 4417 statement balance is $${usd(amt)}. Minimum due $${usd(Math.max(35, Math.round(amt * 0.02)))}. Payment due by ${monthFirst(new Date(d.getFullYear(), d.getMonth() + 1, 15))}.`,
+  }),
+  chasePaid: (amt) => ({ sender: '24273', body: `Chase: We've received your $${usd(amt)} payment to your credit card ending in 4417. Thank you.` }),
+  amexStatement: (amt, _w, d) => ({
+    sender: '263966',
+    body: `Amex: Your credit card ending in 1009 statement balance is $${usd(amt)}. Minimum due $${usd(Math.max(40, Math.round(amt * 0.02)))}. Payment due by ${monthFirst(new Date(d.getFullYear(), d.getMonth() + 1, 20))}.`,
+  }),
+  amexPaid: (amt) => ({ sender: '263966', body: `Amex: We've received your $${usd(amt)} payment to your credit card ending in 1009. Thank you.` }),
+};
+
+const US_DAILY: [number, keyof typeof US, string[], number, number][] = [
+  [0.45, 'chaseCard', ['STARBUCKS', 'BLUE BOTTLE COFFEE', 'DUNKIN'], 4, 9],
+  [0.3, 'chaseCard', ['CHIPOTLE', 'SWEETGREEN', 'SHAKE SHACK'], 11, 19],
+  [0.25, 'chaseCard', ['DOORDASH', 'UBER EATS', 'GRUBHUB'], 18, 48],
+  [0.35, 'amexCard', ['UBER TRIP', 'LYFT'], 9, 38],
+  [0.2, 'bofaDebit', ["TRADER JOE'S", 'WHOLE FOODS MARKET', 'SAFEWAY'], 28, 140],
+  [0.08, 'chaseCard', ['AMAZON.COM', 'TARGET', 'BEST BUY'], 15, 260],
+  [0.05, 'amexCard', ['AMC THEATRES', 'TICKETMASTER'], 18, 120],
+  [0.04, 'bofaDebit', ['CVS PHARMACY', 'WALGREENS'], 8, 60],
+  [0.05, 'zelleSent', ['Maya Chen', 'Jordan Lee', 'Sam Patel'], 20, 150],
+  [0.025, 'zelleReceived', ['Jordan Lee', 'Maya Chen'], 20, 120],
+  [0.02, 'atm', [''], 60, 200],
+  [0.02, 'refund', ['AMAZON.COM', 'TARGET'], 12, 80],
+];
+
+const US_MONTHLY: [number, keyof typeof US, string, number, number][] = [
+  [1, 'bofaPay', 'AVALON APARTMENTS', 2150, 2150],
+  [3, 'bofaPay', 'VANGUARD BUY', 500, 500],
+  [8, 'bofaPay', 'CON EDISON', 70, 140],
+  [10, 'chaseCard', 'VERIZON WIRELESS', 85, 85],
+  [12, 'chaseCard', 'SPECTRUM', 69.99, 69.99],
+  [14, 'chaseCard', 'NETFLIX.COM', 15.49, 15.49],
+  [15, 'chaseCard', 'SPOTIFY', 11.99, 11.99],
+  [18, 'amexCard', 'PLANET FITNESS', 24.99, 24.99],
+  [22, 'amexCard', 'SHELL OIL', 38, 62],
+  // A shop the categoriser can't place, so "Needs a look" has something to show.
+  [24, 'bofaDebit', 'BLUE DOOR TRADING LLC', 12, 60],
+];
+
+const US_NOISE: { sender: string; body: string }[] = [
+  { sender: '24273', body: 'Your Chase verification code is 482913. Never share it. Chase will never call you for it.' },
+  { sender: '24273', body: "Chase: You're pre-approved for a new card! Apply now for limited time offers." },
+  { sender: '24273', body: 'Chase: A $54.20 transaction at BEST BUY was declined on your card ending in 4417.' },
+];
+
+function demoInboxUS(now: number): RawSms[] {
+  const r = seeded(20261029);
+  const cents = (min: number, max: number) => (min === max ? min : Math.round(r.int(min * 100, max * 100)) / 100);
+  const out: RawSms[] = [];
+  let id = 1;
+  const cycle = { chaseCard: 0, amexCard: 0 };
+  const pending = { chaseCard: 0, amexCard: 0 };
+  const push = (d: Date, msg: { sender: string; body: string }, tpl?: keyof typeof US, amount = 0) => {
+    if (d.getTime() > now) return;
+    out.push({ id: `us${id++}`, sender: msg.sender, body: msg.body, date: d.getTime() });
+    if (tpl === 'chaseCard' || tpl === 'amexCard') cycle[tpl] = Math.round((cycle[tpl] + amount) * 100) / 100;
+  };
+  const at = (base: Date, hour: number) => {
+    const d = new Date(base);
+    d.setHours(hour, r.int(0, 59), r.int(0, 59), 0);
+    return d;
+  };
+  const cards = {
+    chaseCard: { statementDay: 18, payDay: 12, statement: 'chaseStatement', paid: 'chasePaid', payee: 'CHASE CARD SERVICES' },
+    amexCard: { statementDay: 25, payDay: 17, statement: 'amexStatement', paid: 'amexPaid', payee: 'AMEX EPAYMENT' },
+  } as const;
+
+  const today = new Date(now);
+  for (let back = DAYS_BACK; back >= 0; back--) {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - back);
+    for (const [chance, tpl, payees, min, max] of US_DAILY) {
+      if (r.chance(chance)) {
+        const amt = cents(min, max);
+        push(at(day, r.int(7, 22)), US[tpl](amt, r.pick(payees), day), tpl, amt);
+      }
+    }
+    const dom = day.getDate();
+    for (const [onDay, tpl, payee, min, max] of US_MONTHLY) {
+      if (dom === onDay) {
+        const amt = cents(min, max);
+        push(at(day, r.int(9, 20)), US[tpl](amt, payee, day), tpl, amt);
+      }
+    }
+    for (const card of ['chaseCard', 'amexCard'] as const) {
+      const c = cards[card];
+      if (dom === c.payDay && pending[card] > 0) {
+        push(at(day, 10), US.bofaPay(pending[card], c.payee, day));
+        push(at(day, 11), US[c.paid](pending[card], '', day));
+        pending[card] = 0;
+      }
+      if (dom === c.statementDay && cycle[card] > 0) {
+        push(at(day, 23), US[c.statement](cycle[card], '', day));
+        pending[card] = cycle[card];
+        cycle[card] = 0;
+      }
+    }
+    // Paid twice a month.
+    if (dom === 1 || dom === 15) push(at(day, 8), US.payroll(3250, 'ACME CORP PAYROLL', day));
+    if (back % 11 === 5) push(at(day, 12), r.pick(US_NOISE));
+  }
+  return out;
+}
+
 const DAY = 86_400_000;
 
 /** Goals, budget and a few cash expenses that go with the sample data. Never saved. */
-export function demoExtras(now = Date.now()): { goals: Goal[]; budget: number; manual: Txn[] } {
+export function demoExtras(now = Date.now(), kind: SampleKind = 'india'): { goals: Goal[]; budget: number; manual: Txn[] } {
   const inMonths = (m: number) => {
     const d = new Date(now);
     d.setMonth(d.getMonth() + m, 1);
     return d.getTime();
   };
-  const cash = (id: string, amount: number, merchant: string, category: Txn['category'], daysAgo: number, hour: number): Txn => {
+  const cash = (
+    id: string,
+    amount: number,
+    merchant: string,
+    category: Txn['category'],
+    daysAgo: number,
+    hour: number,
+    currency: CurrencyCode,
+    type: Txn['type'] = 'debit',
+  ): Txn => {
     const d = new Date(now - daysAgo * DAY);
     d.setHours(hour, 15, 0, 0);
     return {
       id: `demo-cash-${id}`,
       amount,
-      type: 'debit',
+      currency,
+      type,
       merchant,
       merchantKey: merchant.toLowerCase().replace(/[^a-z0-9]/g, ''),
       category,
@@ -269,7 +421,22 @@ export function demoExtras(now = Date.now()): { goals: Goal[]; budget: number; m
       categorySource: 'manual',
     };
   };
-  return {
+  if (kind === 'us') {
+    return {
+      budget: 4000,
+      goals: [
+        { id: 'demo-goal-1', name: 'Emergency fund', target: 15000, saved: 9200, icon: 'shield-check-outline', color: '#1F8A63', deadline: null, createdAt: now - 200 * DAY },
+        { id: 'demo-goal-2', name: 'Japan trip', target: 6000, saved: 2350, icon: 'airplane', color: '#E8912A', deadline: inMonths(5), createdAt: now - 60 * DAY },
+        { id: 'demo-goal-3', name: 'New laptop', target: 2400, saved: 800, icon: 'laptop', color: '#2F7C9E', deadline: inMonths(8), createdAt: now - 40 * DAY },
+      ],
+      manual: [
+        cash('1', 4.5, 'Coffee cart', 'food', 0, 9, 'USD'),
+        cash('2', 20, 'Tips', 'other', 1, 21, 'USD'),
+        cash('3', 18.25, 'Farmers market', 'groceries', 2, 11, 'USD'),
+      ],
+    };
+  }
+  const india: { goals: Goal[]; budget: number; manual: Txn[] } = {
     budget: 60000,
     goals: [
       { id: 'demo-goal-1', name: 'Emergency fund', target: 300000, saved: 184000, icon: 'shield-check-outline', color: '#1F8A63', deadline: null, createdAt: now - 200 * DAY },
@@ -277,10 +444,31 @@ export function demoExtras(now = Date.now()): { goals: Goal[]; budget: number; m
       { id: 'demo-goal-3', name: 'New laptop', target: 120000, saved: 36000, icon: 'laptop', color: '#2F7C9E', deadline: inMonths(8), createdAt: now - 40 * DAY },
     ],
     manual: [
-      cash('1', 40, 'Chai', 'food', 0, 10),
-      cash('2', 120, 'Auto to office', 'transport', 1, 9),
-      cash('3', 260, 'Vegetables', 'groceries', 2, 19),
-      cash('4', 500, 'Barber', 'other', 9, 18),
+      cash('1', 40, 'Chai', 'food', 0, 10, 'INR'),
+      cash('2', 120, 'Auto to office', 'transport', 1, 9, 'INR'),
+      cash('3', 260, 'Vegetables', 'groceries', 2, 19, 'INR'),
+      cash('4', 500, 'Barber', 'other', 9, 18, 'INR'),
+    ],
+  };
+  if (kind !== 'stress') return india;
+  // Extreme values to check that nothing breaks: huge, tiny, long names, many currencies, a tiny budget.
+  return {
+    budget: 1000,
+    goals: [
+      ...india.goals,
+      { id: 'demo-goal-4', name: 'A very long goal name that keeps going and going past the edge', target: 987654321, saved: 1, icon: 'rocket-launch-outline', color: '#B4235A', deadline: now - 30 * DAY, createdAt: now - 90 * DAY },
+      { id: 'demo-goal-5', name: 'Overfilled', target: 1000, saved: 2500, icon: 'star-outline', color: '#2F7C9E', deadline: null, createdAt: now - 10 * DAY },
+    ],
+    manual: [
+      ...india.manual,
+      cash('s1', 987654321.75, 'Supercalifragilistic Ventures International Private Limited Payout', 'received', 0, 8, 'INR', 'credit'),
+      cash('s2', 12345678.9, 'Extraordinarily Long Merchant Name That Never Seems To End Anywhere', 'shopping', 0, 12, 'INR'),
+      cash('s3', 0.5, 'Toffee', 'food', 0, 13, 'INR'),
+      cash('s4', 1299.99, 'Apple Store Fifth Avenue', 'shopping', 1, 15, 'USD'),
+      cash('s5', 12.5, 'Café de Flore', 'food', 1, 16, 'EUR'),
+      cash('s6', 3450, 'Harrods London', 'shopping', 2, 17, 'GBP'),
+      cash('s7', 99, 'Dubai Mall', 'shopping', 2, 18, 'AED'),
+      cash('s8', 120000, 'Tokyo Hotel', 'travel', 3, 19, 'JPY'),
     ],
   };
 }

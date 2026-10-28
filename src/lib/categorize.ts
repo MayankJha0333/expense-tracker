@@ -8,24 +8,26 @@ import type { CategoryId } from './types';
 
 /** Checked in this order, so "Swiggy Instamart" becomes Groceries before Food. */
 const KEYWORDS: [CategoryId, string[]][] = [
-  ['card_bill', ['cred club', 'credclub', 'cred']],
+  ['card_bill', ['cred club', 'credclub', 'cred', 'card services', 'amex epayment']],
   ['groceries', [
     'blinkit', 'zepto', 'instamart', 'bigbasket', 'bbnow', 'dmart', 'avenue supermarts', 'jiomart',
     'grofers', 'reliance fresh', 'smart bazaar', 'smartbazaar', 'naturesbasket', 'spencer', 'milkbasket',
     'country delight', 'licious', 'freshtohome', 'kirana', 'supermarket', 'grocery', 'groceries',
-    'provision', 'dunzo', 'swiggy genie',
+    'provision', 'dunzo', 'swiggy genie', 'trader joe', 'whole foods', 'wholefds', 'safeway', 'kroger',
+    'costco', 'aldi', 'wegmans', 'instacart', 'publix', 'sprouts',
   ]],
   ['food', [
     'swiggy', 'zomato', 'dominos', 'domino', 'pizza', 'mcdonald', 'kfc', 'burger', 'starbucks', 'cafe',
     'coffee', 'restaurant', 'chai', 'bakery', 'sweets', 'haldiram', 'biryani', 'dunkin', 'subway',
     'eatsure', 'faasos', 'behrouz', 'box8', 'barbeque', 'food', 'kitchen', 'dhaba', 'eatclub', 'chaayos',
-    'third wave', 'blue tokai', 'theobroma', 'wow momo', 'momo', 'canteen', 'juice',
+    'third wave', 'blue tokai', 'theobroma', 'wow momo', 'momo', 'canteen', 'juice', 'chipotle', 'doordash',
+    'uber eats', 'ubereats', 'grubhub', 'sweetgreen', 'panera', 'taco bell', 'wendys', 'shake shack',
   ]],
   ['entertainment', [
     'netflix', 'spotify', 'hotstar', 'disney', 'prime video', 'primevideo', 'amazon prime', 'youtube',
     'bookmyshow', 'pvr', 'inox', 'cinepolis', 'sonyliv', 'zee5', 'jiocinema', 'google play', 'playstore',
     'apple.com', 'itunes', 'steam', 'playstation', 'xbox', 'district', 'paytm insider', 'gaana', 'wynk',
-    'audible', 'dream11', 'mpl', 'cinema', 'movies',
+    'audible', 'dream11', 'mpl', 'cinema', 'movies', 'hulu', 'hbo max', 'amc theatres', 'ticketmaster',
   ]],
   ['travel', [
     'irctc', 'makemytrip', 'goibibo', 'cleartrip', 'indigo', 'interglobe', 'air india', 'airindia',
@@ -34,16 +36,17 @@ const KEYWORDS: [CategoryId, string[]][] = [
   ]],
   ['transport', [
     'uber', 'ola', 'olacabs', 'rapido', 'metro', 'dmrc', 'mmrc', 'bmrcl', 'namma yatri', 'blusmart',
-    'fastag', 'parking', 'toll', 'auto', 'cab', 'taxi', 'bmtc',
+    'fastag', 'parking', 'toll', 'auto', 'cab', 'taxi', 'bmtc', 'lyft', 'mta', 'citi bike',
   ]],
   ['fuel', [
     'petrol', 'fuel', 'hpcl', 'bpcl', 'iocl', 'indian oil', 'indianoil', 'bharat petroleum', 'hp pay',
-    'shell', 'nayara', 'filling station', 'petroleum', 'service station',
+    'shell', 'nayara', 'filling station', 'petroleum', 'service station', 'chevron', 'exxon', 'speedway',
   ]],
   ['health', [
     'pharmacy', 'pharma', 'chemist', 'medical', 'apollo', 'medplus', '1mg', 'pharmeasy', 'netmeds',
     'hospital', 'clinic', 'diagnostic', 'pathlab', 'lal path', 'thyrocare', 'practo', 'cult.fit',
-    'cultfit', 'curefit', 'healthkart', 'gym', 'fitness', 'dental', 'doctor', 'star health',
+    'cultfit', 'curefit', 'healthkart', 'gym', 'fitness', 'dental', 'doctor', 'star health', 'cvs',
+    'walgreens', 'equinox',
   ]],
   ['education', [
     'udemy', 'coursera', 'byju', 'unacademy', 'school', 'college', 'university', 'academy', 'institute',
@@ -52,6 +55,7 @@ const KEYWORDS: [CategoryId, string[]][] = [
   ['investments', [
     'zerodha', 'groww', 'upstox', 'kuvera', 'mutual fund', 'mutualfund', 'sip', 'nps', 'ppf',
     'indmoney', 'smallcase', 'angel one', 'angelone', 'paytm money', 'kite', 'iccl', 'nsdl', 'cdsl',
+    'vanguard', 'fidelity', 'schwab', 'robinhood', 'betterment', 'wealthfront',
   ]],
   ['emi', [
     'emi', 'loan', 'bajaj fin', 'bajajfinance', 'finserv', 'lazypay', 'simpl', 'kreditbee',
@@ -59,20 +63,22 @@ const KEYWORDS: [CategoryId, string[]][] = [
   ]],
   ['home', [
     'rent', 'nobroker', 'housing.com', 'maintenance', 'society', 'urban company', 'urbanclap',
-    'furlenco', 'rentomojo', 'nestaway', 'mygate', 'electrician', 'plumber',
+    'furlenco', 'rentomojo', 'nestaway', 'mygate', 'electrician', 'plumber', 'apartments', 'property management',
   ]],
   ['bills', [
     'electricity', 'bescom', 'msedcl', 'mahadiscom', 'tata power', 'tatapower', 'adani electricity',
     'bses', 'tneb', 'kseb', 'torrent power', 'mahanagar gas', 'indraprastha gas', 'indane',
     'bharat gas', 'hp gas', 'broadband', 'act fibernet', 'fibernet', 'jio', 'airtel', 'vodafone',
     'bsnl', 'recharge', 'tata play', 'tataplay', 'sun direct', 'postpaid', 'prepaid', 'billdesk',
-    'bbps', 'insurance', 'lic', 'policybazaar', 'acko',
+    'bbps', 'insurance', 'lic', 'policybazaar', 'acko', 'con edison', 'coned', 'pg&e', 'verizon', 't-mobile',
+    'tmobile', 'at&t', 'comcast', 'xfinity', 'spectrum', 'geico', 'state farm',
   ]],
   ['shopping', [
     'amazon', 'amzn', 'flipkart', 'myntra', 'ajio', 'meesho', 'nykaa', 'tatacliq', 'tata cliq', 'croma',
     'reliance digital', 'vijay sales', 'decathlon', 'ikea', 'lenskart', 'firstcry', 'snapdeal',
     'shoppers stop', 'lifestyle', 'westside', 'zara', 'uniqlo', 'pantaloons', 'max fashion', 'trends',
-    'boat', 'mall', 'store', 'mart', 'shop', 'fashion',
+    'boat', 'mall', 'store', 'mart', 'shop', 'fashion', 'target', 'walmart', 'best buy', 'bestbuy', 'macys',
+    'nordstrom', 'home depot', 'etsy', 'ebay',
   ]],
 ];
 
@@ -97,6 +103,7 @@ const SALARY = /\b(salary|sal cr|payroll)\b/i;
 const REFUND = /\b(refund|refunded|reversal|reversed|cashback|cash back)\b/i;
 const INTEREST = /\b(interest|int\.? ?pd|int credit)\b/i;
 const P2A = /\bp2a\b/i;
+const P2P_APP = /\b(zelle|venmo|cash ?app)\b/i;
 
 const BODY_HINTS: [RegExp, CategoryId][] = [
   [/\bfastag\b/i, 'transport'],
@@ -153,6 +160,8 @@ export function categorize(p: ParsedTxn, body: string): CategoryId {
   for (const [rx, id] of BODY_HINTS) if (rx.test(text)) return id;
 
   if (P2A.test(text) || p.personLike) return 'people';
+  // Zelle / Venmo / Cash App to a person's name (US).
+  if (P2P_APP.test(text) && looksLikePersonName(p.merchant)) return 'people';
   if (p.mode === 'upi' && looksLikePersonName(p.merchant)) return 'people';
   return 'other';
 }

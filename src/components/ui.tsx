@@ -15,8 +15,14 @@ export function Txt({
   ...rest
 }: TextProps & { variant?: TypeVariant; color?: string; tabular?: boolean }) {
   const p = usePalette();
+  // Numbers (tabular) never wrap mid-amount: they stay on one line and shrink to fit,
+  // so ₹1,23,45,678 can't break into "₹1,23,45,6 / 78". A screen can still pass its own numberOfLines.
+  const fit = tabular && rest.numberOfLines === undefined ? { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.6 } : null;
   return (
     <Text
+      // Big text is already big: with the phone's largest font size it would push numbers off cards.
+      maxFontSizeMultiplier={variant === 'display' || variant === 'title' ? 1.15 : variant === 'amount' ? 1.25 : 1.6}
+      {...fit}
       {...rest}
       style={[
         type[variant] as TextStyle,
@@ -361,7 +367,7 @@ export function AmountBar({
         <Txt variant="body" numberOfLines={1} style={{ flex: 1 }}>
           {label}
         </Txt>
-        <Txt variant="bodyStrong" tabular>
+        <Txt variant="bodyStrong" tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ flexShrink: 1, maxWidth: '62%' }}>
           {amount}
         </Txt>
         {share ? (

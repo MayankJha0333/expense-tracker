@@ -8,8 +8,8 @@ import { billLine, MonthSwitcher, TxnRow } from '../../components/finance';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { AmountBar, Button, Card, Empty, SectionHeader, Txt } from '../../components/ui';
 import { cardDues, categoryTotals, creditCardKeys, instrumentFor, type InstrumentKind } from '../../lib/accounts';
-import { monthName, monthShort } from '../../lib/analytics';
-import { inr, percent } from '../../lib/money';
+import { monthName, monthShort, shortDay } from '../../lib/analytics';
+import { money, percent } from '../../lib/money';
 import { useStore } from '../../lib/store';
 import { cat } from '../../lib/types';
 import { radius, space, usePalette } from '../../theme';
@@ -23,7 +23,7 @@ const KIND_LABEL: Record<InstrumentKind, string> = {
   cash: 'Cash',
 };
 
-const longDate = (ts: number) => new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' });
+const longDate = (ts: number) => shortDay(ts, true);
 
 /** One card, bank account, wallet or cash: its bill (for credit cards), where the money went, and every payment. */
 export default function AccountScreen() {
@@ -67,15 +67,15 @@ export default function AccountScreen() {
           {kind === 'bank' ? `Spent from this account in ${monthName(month)}` : `Spent in ${monthName(month)}`}
         </Txt>
         <Txt variant="display" color={p.cardAccent} tabular adjustsFontSizeToFit numberOfLines={1}>
-          {inr(item?.spent ?? 0)}
+          {money(item?.spent ?? 0)}
         </Txt>
         <Txt variant="small" color={p.cardMuted}>
           {item ? `${item.spendCount} ${item.spendCount === 1 ? 'payment' : 'payments'}` : 'No payments this month'}
-          {item && item.received > 0 ? ` · ${inr(item.received)} came in` : ''}
+          {item && item.received > 0 ? ` · ${money(item.received)} came in` : ''}
         </Txt>
         {due && due.status !== 'paid' && due.spentSince > 0 ? (
           <Txt variant="small" color={p.cardMuted}>
-            {inr(due.spentSince)} spent since the last statement, which goes on the next bill.
+            {money(due.spentSince)} spent since the last statement, which goes on the next bill.
           </Txt>
         ) : null}
       </View>
@@ -90,10 +90,10 @@ export default function AccountScreen() {
               </Txt>
             </View>
             <Row label="Statement" value={longDate(due.bill.statementDate)} />
-            <Row label="Total due" value={inr(due.bill.amountDue, { decimals: true })} />
-            {due.bill.minDue !== null ? <Row label="Minimum due" value={inr(due.bill.minDue, { decimals: true })} /> : null}
+            <Row label="Total due" value={money(due.bill.amountDue, { decimals: true })} />
+            {due.bill.minDue !== null ? <Row label="Minimum due" value={money(due.bill.minDue, { decimals: true })} /> : null}
             {due.bill.dueDate ? <Row label="Due date" value={longDate(due.bill.dueDate)} /> : null}
-            {due.paid > 0 && due.status !== 'paid' ? <Row label="Paid so far" value={inr(due.paid)} /> : null}
+            {due.paid > 0 && due.status !== 'paid' ? <Row label="Paid so far" value={money(due.paid)} /> : null}
             {due.status === 'paid' ? (
               <Txt variant="small" color={p.muted}>
                 {due.paidVia === 'card_alert'
@@ -131,7 +131,7 @@ export default function AccountScreen() {
               <AmountBar
                 key={c.category}
                 label={cat(c.category).label}
-                amount={inr(c.amount)}
+                amount={money(c.amount)}
                 share={percent(c.share)}
                 fill={c.amount / maxCat}
                 color={kind === 'credit_card' ? p.series[1] : p.accent}

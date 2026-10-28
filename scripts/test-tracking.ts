@@ -101,7 +101,8 @@ for (const acct of ['7788', '8899']) {
     const from = list[i - 1].statementDate;
     const to = list[i].statementDate;
     const spent = txns
-      .filter((t) => t.mode === 'card' && t.account === acct && t.type === 'debit' && t.timestamp > from && t.timestamp < to)
+      // The sample's dollar subscription (FIGMA) isn't part of the rupee cycle.
+      .filter((t) => t.mode === 'card' && t.account === acct && t.type === 'debit' && t.timestamp > from && t.timestamp < to && t.currency !== 'USD')
       .reduce((a, t) => a + t.amount, 0);
     cycles++;
     if (Math.abs(spent - list[i].amountDue) < 1) cycleOk++;

@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Button, Chip, Txt } from '../components/ui';
 import { addMonths, cashflow, thisMonth } from '../lib/analytics';
-import { inr } from '../lib/money';
+import { currencySymbol, money } from '../lib/money';
 import { useStore } from '../lib/store';
 import { fonts, space, usePalette } from '../theme';
 
@@ -49,7 +49,7 @@ export default function BudgetScreen() {
 
         <View style={styles.amountRow}>
           <Txt variant="display" color={valid ? p.ink : p.muted}>
-            ₹
+            {currencySymbol()}
           </Txt>
           <TextInput
             value={text}
@@ -65,11 +65,11 @@ export default function BudgetScreen() {
 
         <View style={{ gap: space.sm }}>
           <Txt variant="smallStrong" color={p.inkSoft}>
-            {usual > 0 ? `You usually spend about ${inr(usual)} a month` : 'Pick a starting point'}
+            {usual > 0 ? `You usually spend about ${money(usual)} a month` : 'Pick a starting point'}
           </Txt>
           <View style={styles.wrap}>
             {suggestions.map((s) => (
-              <Chip key={s} label={inr(s)} selected={amount === s} onPress={() => setText(String(s))} />
+              <Chip key={s} label={money(s)} selected={amount === s} onPress={() => setText(String(s))} />
             ))}
           </View>
         </View>

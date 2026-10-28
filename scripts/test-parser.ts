@@ -1,6 +1,6 @@
 /* Run: npx tsx scripts/test-parser.ts — checks the SMS reader on real-looking bank messages. */
 import { categorize } from '../src/lib/categorize';
-import { inr, inrCompact } from '../src/lib/money';
+import { money, moneyCompact } from '../src/lib/money';
 import { parseSms } from '../src/lib/parser';
 import { processInbox } from '../src/lib/pipeline';
 import { summarize, thisMonth } from '../src/lib/analytics';
@@ -70,6 +70,6 @@ const now = Date.now();
 const { txns, stats } = processInbox(CASES.map(([sender, body], i) => ({ id: String(i), sender, body, date: now - i * 3_600_000 })));
 console.log('pipeline', stats);
 const s = summarize(txns, thisMonth());
-console.log('spent', inr(s.spent), 'received', inr(s.received), s.byCategory.map((c) => `${c.category}:${inr(c.amount)}`).join(' '));
-console.log(inr(1234567), inr(999.5, { decimals: true }), inrCompact(152000), inrCompact(45230));
+console.log('spent', money(s.spent), 'received', money(s.received), s.byCategory.map((c) => `${c.category}:${money(c.amount)}`).join(' '));
+console.log(money(1234567), money(999.5, { decimals: true }), moneyCompact(152000), moneyCompact(45230));
 if (pass !== CASES.length) process.exit(1);

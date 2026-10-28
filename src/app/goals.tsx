@@ -7,7 +7,7 @@ import { Ring } from '../components/charts';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { Badge, Button, Card, Empty, Icon, SectionHeader, ShareBar, Txt } from '../components/ui';
 import { budgetPace, summarize, thisMonth } from '../lib/analytics';
-import { inr, inrCompact, percent } from '../lib/money';
+import { money, moneyCompact, percent } from '../lib/money';
 import { goalPlan } from '../lib/goals';
 import { useStore } from '../lib/store';
 import type { Goal } from '../lib/types';
@@ -42,10 +42,10 @@ export default function Goals() {
                 Put aside
               </Txt>
               <Txt variant="title" color={p.cardText} tabular numberOfLines={1} adjustsFontSizeToFit>
-                {inr(saved)}
+                {money(saved)}
               </Txt>
               <Txt variant="small" color={p.cardMuted}>
-                of {inr(target)} across {goals.length} {goals.length === 1 ? 'goal' : 'goals'}
+                of {money(target)} across {goals.length} {goals.length === 1 ? 'goal' : 'goals'}
               </Txt>
             </View>
           </View>
@@ -58,15 +58,15 @@ export default function Goals() {
               {pace && budget ? (
                 <>
                   <View style={styles.between}>
-                    <Txt variant="bodyStrong">{inr(budget)} a month</Txt>
+                    <Txt variant="bodyStrong">{money(budget)} a month</Txt>
                     <Txt variant="smallStrong" color={pace.used > 1 ? p.danger : p.muted} tabular>
-                      {inr(now.spent)} spent
+                      {money(now.spent)} spent
                     </Txt>
                   </View>
                   <ShareBar share={pace.used} color={pace.used > 1 ? p.danger : pace.onTrack ? p.income : p.accent} height={10} />
                   <Txt variant="small" color={p.muted}>
-                    {pace.left >= 0 ? `${inr(pace.left)} left this month.` : `${inr(-pace.left)} over this month.`}{' '}
-                    {pace.onTrack ? 'On track.' : `On pace for ${inr(pace.projected)}.`}
+                    {pace.left >= 0 ? `${money(pace.left)} left this month.` : `${money(-pace.left)} over this month.`}{' '}
+                    {pace.onTrack ? 'On track.' : `On pace for ${money(pace.projected)}.`}
                   </Txt>
                 </>
               ) : (
@@ -113,7 +113,7 @@ function GoalCard({ goal: g }: { goal: Goal }) {
   const p = usePalette();
   const share = g.target > 0 ? g.saved / g.target : 0;
   return (
-    <Pressable onPress={() => router.push(`/goal?id=${g.id}`)} accessibilityRole="button" accessibilityLabel={`${g.name}, ${inr(g.saved)} of ${inr(g.target)}`}>
+    <Pressable onPress={() => router.push(`/goal?id=${g.id}`)} accessibilityRole="button" accessibilityLabel={`${g.name}, ${money(g.saved)} of ${money(g.target)}`}>
       <Card style={{ gap: space.md }}>
         <View style={styles.goalHead}>
           <Badge icon={g.icon} color={g.color} size={44} />
@@ -132,10 +132,10 @@ function GoalCard({ goal: g }: { goal: Goal }) {
         <ShareBar share={share} color={g.color} height={10} />
         <View style={styles.between}>
           <Txt variant="smallStrong" tabular>
-            {inr(g.saved)}
+            {money(g.saved)}
           </Txt>
           <Txt variant="small" color={p.muted} tabular>
-            of {inrCompact(g.target)}
+            of {moneyCompact(g.target)}
           </Txt>
         </View>
       </Card>

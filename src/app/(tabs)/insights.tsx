@@ -20,7 +20,7 @@ import {
   type FlowMonth,
   type MonthSummary,
 } from '../../lib/analytics';
-import { inr, inrCompact, percent } from '../../lib/money';
+import { formatCount, money, moneyCompact, percent } from '../../lib/money';
 import { useStore } from '../../lib/store';
 import { cat, type SkipReason } from '../../lib/types';
 import { radius, space, usePalette } from '../../theme';
@@ -100,11 +100,11 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
           Spent in {monthName(month)}
         </Txt>
         <Txt variant="display" tabular adjustsFontSizeToFit numberOfLines={1}>
-          {inr(summary.spent)}
+          {money(summary.spent)}
         </Txt>
         {change !== null ? (
           <Txt variant="smallStrong" color={change > 0.05 ? p.warn : change < -0.05 ? p.income : p.muted}>
-            {change > 0 ? 'Up' : 'Down'} {percent(Math.abs(change))} from {monthShort(previous.month)} ({inr(previous.spent)})
+            {change > 0 ? 'Up' : 'Down'} {percent(Math.abs(change))} from {monthShort(previous.month)} ({money(previous.spent)})
           </Txt>
         ) : null}
       </View>
@@ -119,11 +119,11 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
           />
           {avg > 0 ? (
             <Txt variant="small" color={p.muted} style={{ marginTop: space.md }}>
-              Your usual month is about {inr(avg)}.{' '}
+              Your usual month is about {money(avg)}.{' '}
               {summary.spent > avg * 1.1
-                ? `${name} is ${inr(summary.spent - avg)} above that.`
+                ? `${name} is ${money(summary.spent - avg)} above that.`
                 : summary.spent < avg * 0.9 && summary.spent > 0
-                  ? `${name} is ${inr(avg - summary.spent)} below that.`
+                  ? `${name} is ${money(avg - summary.spent)} below that.`
                   : `${name} is close to normal.`}
             </Txt>
           ) : null}
@@ -135,13 +135,13 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
       ) : (
         <>
           <View style={styles.facts}>
-            <Fact label="Per day" value={inr(summary.avgPerDay)} />
+            <Fact label="Per day" value={money(summary.avgPerDay)} />
             <Fact label="Payments" value={String(summary.spendCount)} />
-            <Fact label="Biggest" value={summary.biggest ? inrCompact(summary.biggest.amount) : '—'} hint={summary.biggest?.merchant} />
+            <Fact label="Biggest" value={summary.biggest ? moneyCompact(summary.biggest.amount) : '—'} hint={summary.biggest?.merchant} />
           </View>
 
           <View>
-            <SectionHeader title="By category" subtitle={`${inr(summary.spent)} in ${name}`} />
+            <SectionHeader title="By category" subtitle={`${money(summary.spent)} in ${name}`} />
             <Card style={{ paddingVertical: space.sm }}>
               {summary.byCategory.map((s) => (
                 <CategoryRow
@@ -177,7 +177,7 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
                           </Txt>
                         </View>
                         <Txt variant="bodyStrong" tabular>
-                          {inr(r.amount)}
+                          {money(r.amount)}
                         </Txt>
                       </View>
                     </View>
@@ -189,7 +189,7 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
                     About every month
                   </Txt>
                   <Txt variant="smallStrong" tabular>
-                    {inr(regular.reduce((a, r) => a + r.amount, 0))}
+                    {money(regular.reduce((a, r) => a + r.amount, 0))}
                   </Txt>
                 </View>
               </Card>
@@ -218,7 +218,7 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
                         </Txt>
                       </View>
                       <Txt variant="bodyStrong" tabular>
-                        {inr(m.amount)}
+                        {money(m.amount)}
                       </Txt>
                     </View>
                   </View>
@@ -238,7 +238,7 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
                 <AmountBar
                   key={m.group}
                   label={`${PAY_GROUP_LABEL[m.group]} · ${m.count} ${m.count === 1 ? 'payment' : 'payments'}`}
-                  amount={inr(m.amount)}
+                  amount={money(m.amount)}
                   share={percent(m.share)}
                   fill={m.share / Math.max(0.0001, mix[0].share)}
                   color={p.series[payGroupColorIndex(m.group)]}
@@ -268,7 +268,7 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
         <Card style={{ gap: space.sm }}>
           <Txt variant="heading">What the SMS reader skipped</Txt>
           <Txt variant="small" color={p.muted}>
-            Out of {stats.scanned.toLocaleString('en-IN')} messages, {stats.kept.toLocaleString('en-IN')} were payments. These were left out:
+            Out of {formatCount(stats.scanned)} messages, {formatCount(stats.kept)} were payments. These were left out:
           </Txt>
           {(Object.keys(SKIP_LABEL) as SkipReason[])
             .filter((r) => (stats.skipped[r] ?? 0) > 0)
@@ -276,7 +276,7 @@ function Spending({ summary, previous, flow }: { summary: MonthSummary; previous
               <View key={r} style={styles.between}>
                 <Txt variant="small">{SKIP_LABEL[r]}</Txt>
                 <Txt variant="smallStrong" tabular>
-                  {(stats.skipped[r] ?? 0).toLocaleString('en-IN')}
+                  {formatCount((stats.skipped[r] ?? 0))}
                 </Txt>
               </View>
             ))}
@@ -299,8 +299,8 @@ function Income({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] })
   return (
     <>
       <View style={styles.facts}>
-        <Fact label={`In ${name}`} value={inrCompact(summary.received)} tone={p.income} />
-        <Fact label="Usual month" value={avg > 0 ? inrCompact(avg) : '—'} />
+        <Fact label={`In ${name}`} value={moneyCompact(summary.received)} tone={p.income} />
+        <Fact label="Usual month" value={avg > 0 ? moneyCompact(avg) : '—'} />
         <Fact label="Sources" value={String(summary.incomeSources.length)} />
       </View>
 
@@ -325,13 +325,13 @@ function Income({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] })
       ) : (
         <>
           <View>
-            <SectionHeader title="Where it came from" subtitle={`${inr(summary.received)} counted as income`} />
+            <SectionHeader title="Where it came from" subtitle={`${money(summary.received)} counted as income`} />
             <Card style={{ gap: space.lg }}>
               {summary.incomeByCategory.map((c) => (
                 <AmountBar
                   key={c.category}
                   label={cat(c.category).label}
-                  amount={inr(c.amount)}
+                  amount={money(c.amount)}
                   share={percent(c.share)}
                   fill={c.amount / maxIncomeCat}
                   color={p.income}
@@ -366,7 +366,7 @@ function Income({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] })
                       </Txt>
                     </Txt>
                     <Txt variant="smallStrong" tabular color={p.muted}>
-                      {inr(r.amount)}
+                      {money(r.amount)}
                     </Txt>
                   </View>
                 ))}
@@ -394,7 +394,7 @@ function Income({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] })
                             {s.name}
                           </Txt>
                           <Txt variant="bodyStrong" tabular color={p.income}>
-                            +{inr(s.amount)}
+                            +{money(s.amount)}
                           </Txt>
                         </View>
                         <ShareBar share={s.share} color={c.color} />
@@ -428,7 +428,7 @@ function Savings({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] }
   return (
     <>
       <View style={styles.facts}>
-        <Fact label={`Saved in ${name}`} value={inrCompact(summary.saved)} tone={summary.saved < 0 ? p.danger : p.savings} />
+        <Fact label={`Saved in ${name}`} value={moneyCompact(summary.saved)} tone={summary.saved < 0 ? p.danger : p.savings} />
         <Fact label="Savings rate" value={summary.savingsRate === null ? '—' : percent(Math.max(0, summary.savingsRate))} />
         <Fact label="6-month rate" value={avgRate === null ? '—' : percent(Math.max(0, avgRate))} />
       </View>
@@ -470,13 +470,13 @@ function Savings({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] }
                 {monthShort(f.month)}
               </Txt>
               <Txt variant="small" tabular style={styles.cNum}>
-                {inrCompact(f.income)}
+                {moneyCompact(f.income)}
               </Txt>
               <Txt variant="small" tabular style={styles.cNum}>
-                {inrCompact(f.spent)}
+                {moneyCompact(f.spent)}
               </Txt>
               <Txt variant="smallStrong" tabular color={f.saved < 0 ? p.danger : p.savings} style={styles.cNum}>
-                {inrCompact(f.saved)}
+                {moneyCompact(f.saved)}
               </Txt>
             </View>
           ))}
@@ -487,7 +487,7 @@ function Savings({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] }
         <Card style={styles.line}>
           <Badge icon="chart-line" color={p.savings} size={40} />
           <View style={{ flex: 1 }}>
-            <Txt variant="bodyStrong">{inr(summary.invested)} invested in {name}</Txt>
+            <Txt variant="bodyStrong">{money(summary.invested)} invested in {name}</Txt>
             <Txt variant="small" color={p.muted}>
               SIPs and investments are part of what you saved, so they are not counted as spending.
             </Txt>
@@ -498,7 +498,7 @@ function Savings({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] }
       <NoticeRow
         tone="accent"
         icon="target"
-        title={budget ? `Budget: ${inr(budget)} a month` : 'Set a monthly budget'}
+        title={budget ? `Budget: ${money(budget)} a month` : 'Set a monthly budget'}
         body={budget ? 'Your spending limit for each month.' : 'See how much is left each day.'}
         pill={budget ? 'Change' : 'Set'}
         onPress={() => router.push('/budget')}
@@ -510,7 +510,7 @@ function Savings({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] }
           <Card style={{ gap: space.sm }}>
             <View style={styles.between}>
               <Txt variant="bodyStrong">
-                {inr(goalSaved)} of {inr(goalTarget)}
+                {money(goalSaved)} of {money(goalTarget)}
               </Txt>
               <Tag label={percent(goalTarget > 0 ? goalSaved / goalTarget : 0)} color={p.savings} />
             </View>

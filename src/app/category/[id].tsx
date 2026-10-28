@@ -6,7 +6,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { TxnList } from '../../components/TxnList';
 import { Badge, Txt } from '../../components/ui';
 import { monthName, monthOf, parseMonthKey, sameMonth } from '../../lib/analytics';
-import { inr } from '../../lib/money';
+import { money } from '../../lib/money';
 import { useStore } from '../../lib/store';
 import { cat, countsAsSpend, isCategoryId } from '../../lib/types';
 import { space, usePalette } from '../../theme';
@@ -44,11 +44,11 @@ export default function CategoryScreen() {
           </View>
           <View>
             <Txt variant="display" tabular>
-              {inr(total)}
+              {money(total)}
             </Txt>
             <Txt variant="small" color={p.muted}>
               {list.length} {list.length === 1 ? 'payment' : 'payments'}
-              {list.length > 1 ? `, about ${inr(average)} each` : ''}
+              {list.length > 1 ? `, about ${money(average)} each` : ''}
             </Txt>
           </View>
         </View>

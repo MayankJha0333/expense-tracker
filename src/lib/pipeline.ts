@@ -19,6 +19,7 @@ function isDuplicate(kept: Txn[], p: ParsedTxn, sms: RawSms): boolean {
     if (
       t.type === p.type &&
       Math.round(t.amount * 100) === cents &&
+      (t.currency ?? null) === (p.currency ?? null) &&
       (t.account === null || p.account === null || t.account === p.account)
     ) {
       return true;
@@ -74,6 +75,7 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
     kept.push({
       id: `sms-${sms.id}`,
       amount: p.amount,
+      ...(p.currency ? { currency: p.currency } : {}),
       type: p.type,
       merchant,
       merchantKey: merchant === p.merchant ? p.merchantKey : keyOf(merchant),

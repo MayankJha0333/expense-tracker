@@ -10,13 +10,13 @@ import { Ring } from '../../components/charts';
 import { HeroCard } from '../../components/HeroCard';
 import { AmountBar, Button, Card, Empty, Icon, IconButton, MixBar, NoticeRow, SectionHeader, Txt } from '../../components/ui';
 import { cardDues, duesSummary, needsReview, PAY_GROUP_LABEL, payGroupColorIndex, payMix, shortCardName } from '../../lib/accounts';
-import { budgetPace, monthKey, monthName, monthShort, sameMonth, summarize, thisMonth } from '../../lib/analytics';
-import { inr, percent } from '../../lib/money';
+import { budgetPace, shortDay, monthKey, monthName, monthShort, sameMonth, summarize, thisMonth } from '../../lib/analytics';
+import { currencyOf, type CurrencyCode } from '../../lib/currency';
+import { currencySymbol, formatCount, money, percent } from '../../lib/money';
 import { useStore } from '../../lib/store';
-import { cat, type IconName } from '../../lib/types';
+import { cat, isForeign, type IconName } from '../../lib/types';
 import { space, usePalette } from '../../theme';
 
-const shortDate = (ts: number) => new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
 export default function Home() {
   const p = usePalette();
@@ -27,6 +27,13 @@ export default function Home() {
   const mix = useMemo(() => payMix(summary.txns), [summary]);
   const dues = useMemo(() => duesSummary(cardDues(bills, txns, new Set(paidBills))), [bills, txns, paidBills]);
   const review = useMemo(() => summary.txns.filter(needsReview), [summary]);
+  // Payments in another currency this month: listed, but never added to the totals above.
+  const foreign = useMemo(() => {
+    const list = summary.txns.filter((t) => isForeign(t) && !t.excluded);
+    const sums = new Map<CurrencyCode, number>();
+    for (const t of list) sums.set(currencyOf(t), (sums.get(currencyOf(t)) ?? 0) + (t.type === 'debit' ? t.amount : -t.amount));
+    return { count: list.length, codes: [...sums.keys()], text: [...sums].map(([c, v]) => money(v, { currency: c })).join(' · ') };
+  }, [summary]);
   const pace = budget ? budgetPace(summary, budget) : null;
 
   const smsOn = source === 'sms' && permission === 'granted';
@@ -78,7 +85,7 @@ export default function Home() {
         {/* 1. Saved this month, with money in and money out (design 4a) */}
         <HeroCard
           onPress={() => router.push('/insights')}
-          accessibilityLabel={`${isCurrent ? `${name} so far` : monthName(month)}: money in ${inr(summary.received)}, spent ${inr(summary.spent)}, ${overspent ? 'overspent' : 'saved'} ${inr(Math.abs(summary.saved))}. Opens insights.`}
+          accessibilityLabel={`${isCurrent ? `${name} so far` : monthName(month)}: money in ${money(summary.received)}, spent ${money(summary.spent)}, ${overspent ? 'overspent' : 'saved'} ${money(Math.abs(summary.saved))}. Opens insights.`}
         >
           <Txt variant="smallStrong" color={p.heroText}>
             {overspent ? 'Overspent in' : 'Saved in'} {monthName(month).split(' ')[0]}
@@ -86,7 +93,7 @@ export default function Home() {
           </Txt>
           <Txt variant="display" color={p.heroValue} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} style={styles.heroAmount}>
             {overspent ? '-' : ''}
-            {inr(Math.abs(summary.saved))}
+            {money(Math.abs(summary.saved))}
           </Txt>
           {summary.received > 0 ? (
             <View style={[styles.heroChip, { backgroundColor: p.heroChip }]}>
@@ -101,27 +108,42 @@ export default function Home() {
             </Txt>
           )}
           <View style={styles.heroTiles}>
-            <HeroTile icon="arrow-bottom-left" label="Money in" value={inr(summary.received)} />
-            <HeroTile icon="arrow-top-right" label="Money out" value={inr(summary.spent)} />
+            <HeroTile icon="arrow-bottom-left" label="Money in" value={money(summary.received)} />
+            <HeroTile icon="arrow-top-right" label="Money out" value={money(summary.spent)} />
           </View>
           {summary.invested > 0 ? (
             <Txt variant="small" color={p.heroMuted}>
-              {inr(summary.invested)} of what you saved went into SIPs and investments.
+              {money(summary.invested)} of what you saved went into SIPs and investments.
             </Txt>
           ) : null}
         </HeroCard>
+
+        {foreign.count > 0 ? (
+          <NoticeRow
+            tone="info"
+            icon="earth"
+            title={`${foreign.count} ${foreign.count === 1 ? 'payment' : 'payments'} in ${foreign.codes.length > 2 ? 'other currencies' : foreign.codes.join(' and ')}`}
+            body={
+              foreign.codes.length > 2
+                ? `${foreign.codes.join(', ')} · Not in your ${currencySymbol()} totals`
+                : `${foreign.text} · Not in your ${currencySymbol()} totals (no exchange rates offline)`
+            }
+            pill="View"
+            onPress={() => router.navigate({ pathname: '/activity', params: { filter: 'foreign' } })}
+          />
+        ) : null}
 
         {/* 2. Credit card bills still to pay */}
         {next ? (
           <NoticeRow
             tone={lateDays ? 'danger' : dueSoon ? 'warn' : 'neutral'}
             icon="credit-card-clock-outline"
-            title={`${inr(dues.total)} to pay on ${dues.open.length} ${dues.open.length === 1 ? 'card' : 'cards'}`}
+            title={`${money(dues.total)} due on ${dues.open.length} ${dues.open.length === 1 ? 'card' : 'cards'}`}
             body={
               lateDays
                 ? `${shortCardName(next.name)} · ${lateDays} ${lateDays === 1 ? 'day' : 'days'} late`
                 : next.bill.dueDate
-                  ? `${shortCardName(next.name)} · due ${shortDate(next.bill.dueDate)}`
+                  ? `${shortCardName(next.name)} · due ${shortDay(next.bill.dueDate)}`
                   : shortCardName(next.name)
             }
             pill={
@@ -158,7 +180,7 @@ export default function Home() {
                 <AmountBar
                   key={c.category}
                   label={cat(c.category).label}
-                  amount={inr(c.amount)}
+                  amount={money(c.amount)}
                   share={percent(c.share)}
                   fill={c.amount / maxCat}
                   onPress={() => router.push(`/category/${c.category}?month=${monthKey(month)}`)}
@@ -170,7 +192,7 @@ export default function Home() {
                     Everything else
                   </Txt>
                   <Txt variant="smallStrong" tabular>
-                    {inr(rest)} · {percent(rest / Math.max(1, summary.spent))}
+                    {money(rest)} · {percent(rest / Math.max(1, summary.spent))}
                   </Txt>
                 </View>
               ) : null}
@@ -197,7 +219,7 @@ export default function Home() {
                       </Txt>
                     </View>
                     <Txt variant="bodyStrong" tabular>
-                      {inr(m.amount)}
+                      {money(m.amount)}
                     </Txt>
                   </View>
                 ))}
@@ -211,26 +233,26 @@ export default function Home() {
           <Pressable
             onPress={() => router.push('/budget')}
             accessibilityRole="button"
-            accessibilityLabel={`Monthly budget, ${Math.round(pace.used * 100)}% used. ${pace.left >= 0 ? `${inr(pace.left)} left` : `${inr(-pace.left)} over`}. Edit budget.`}
+            accessibilityLabel={`Monthly budget, ${pace.used > 9.99 ? 'over 999%' : `${Math.round(pace.used * 100)}%`} used. ${pace.left >= 0 ? `${money(pace.left)} left` : `${money(-pace.left)} over`}. Edit budget.`}
           >
             <Card style={styles.budget}>
               <Ring progress={pace.used} size={64} thickness={8} color={budgetTone} track={p.track}>
-                <Txt variant="smallStrong" tabular>
-                  {Math.round(pace.used * 100)}%
+                <Txt variant="smallStrong" tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ maxWidth: 44, textAlign: 'center' }}>
+                  {pace.used > 9.99 ? '999%+' : `${Math.round(pace.used * 100)}%`}
                 </Txt>
               </Ring>
               <View style={{ flex: 1, gap: 3 }}>
                 <Txt variant="small" color={p.muted}>
                   Monthly budget
                 </Txt>
-                <Txt variant="bodyStrong" numberOfLines={1}>
-                  {pace.left >= 0 ? `${inr(pace.left)} left of ${inr(budget)}` : `${inr(-pace.left)} over ${inr(budget)}`}
+                <Txt variant="bodyStrong" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {pace.left >= 0 ? `${money(pace.left)} left of ${money(budget)}` : `${money(-pace.left)} over ${money(budget)}`}
                 </Txt>
                 <Txt variant="small" color={pace.used > 0.85 ? budgetTone : p.muted}>
                   {pace.left < 0
                     ? 'Over budget this month'
                     : isCurrent && pace.daysLeft > 0
-                      ? `About ${inr(pace.perDayLeft)} a day for ${pace.daysLeft} more days`
+                      ? `About ${money(pace.perDayLeft)} a day for ${pace.daysLeft} more days`
                       : pace.onTrack
                         ? 'Stayed within budget'
                         : 'Went over budget'}
@@ -279,8 +301,8 @@ export default function Home() {
             <Icon name="shield-check-outline" size={18} color={p.income} />
             <Txt variant="small" color={p.muted} style={{ flex: 1 }}>
               {source === 'demo' ? 'Sample: ' : ''}
-              Checked {stats.scanned.toLocaleString('en-IN')} messages on this phone and found {stats.kept.toLocaleString('en-IN')} payments
-              {dues.open.length || bills.length ? ` and ${bills.length} card statements` : ''}. Skipped {skippedNoise.toLocaleString('en-IN')} OTPs, offers and
+              Checked {formatCount(stats.scanned)} messages on this phone and found {formatCount(stats.kept)} payments
+              {dues.open.length || bills.length ? ` and ${bills.length} card statements` : ''}. Skipped {formatCount(skippedNoise)} OTPs, offers and
               reminders. Nothing was uploaded.
             </Txt>
           </View>

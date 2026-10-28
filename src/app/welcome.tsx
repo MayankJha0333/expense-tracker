@@ -20,7 +20,7 @@ const POINTS: { icon: IconName; title: string; body: string }[] = [
 export default function Welcome() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const { permission, requestAccess, chooseSource, status } = useStore();
+  const { permission, requestAccess, chooseSource, status, currency } = useStore();
   const [asking, setAsking] = useState(false);
 
   // Once data is ready (SMS allowed, sample or manual chosen) go to Home.
@@ -38,6 +38,11 @@ export default function Welcome() {
   const salary = cat('salary');
   const needsSettings = permission === 'blocked' || permission === 'restricted';
   const restricted = permission === 'restricted' || (permission === 'blocked' && sideloadRestricted());
+  // The example follows the phone's region: a US card alert in dollars, or an Indian UPI SMS in rupees.
+  const ex =
+    currency === 'USD'
+      ? { sms: 'Chase: A $12.50 transaction was made on your card ending in 4417 at CHIPOTLE on 10/12/26…', shop: 'Chipotle', how: 'Food & dining · Card', spent: '$12.50', pay: 'Salary · Direct deposit', income: '+$3,250' }
+      : { sms: 'Sent Rs.250.00 From HDFC Bank A/C *4521 To SWIGGY On 12/10/26 Ref 6285…', shop: 'Swiggy', how: 'Food & dining · UPI', spent: '₹250', pay: 'Salary · NEFT', income: '+₹98,000' };
 
   return (
     <ScrollView
@@ -64,7 +69,7 @@ export default function Welcome() {
             Bank SMS
           </Txt>
           <Txt variant="small" color={p.inkSoft}>
-            Sent Rs.250.00 From HDFC Bank A/C *4521 To SWIGGY On 12/10/26 Ref 6285…
+            {ex.sms}
           </Txt>
         </View>
         <View style={{ alignItems: 'center' }}>
@@ -74,14 +79,14 @@ export default function Welcome() {
           <Badge icon={food.icon} color={food.color} />
           <View style={{ flex: 1 }}>
             <Txt variant="bodyStrong" color={p.cardText}>
-              Swiggy
+              {ex.shop}
             </Txt>
             <Txt variant="small" color={p.cardMuted}>
-              Food & dining · UPI
+              {ex.how}
             </Txt>
           </View>
           <Txt variant="amount" color={p.cardText}>
-            ₹250
+            {ex.spent}
           </Txt>
         </View>
         <View style={[styles.result, { backgroundColor: p.card, marginTop: -2 }]}>
@@ -91,11 +96,11 @@ export default function Welcome() {
               Acme
             </Txt>
             <Txt variant="small" color={p.cardMuted}>
-              Salary · NEFT
+              {ex.pay}
             </Txt>
           </View>
           <Txt variant="amount" color={p.cardIncome}>
-            +₹98,000
+            {ex.income}
           </Txt>
         </View>
       </View>

@@ -8,9 +8,10 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { Badge, Button, Chip, Empty, NoticeRow, Txt } from '../../components/ui';
 import { needsReview, payLabel } from '../../lib/accounts';
 import { dayLabel, timeLabel } from '../../lib/analytics';
-import { inr } from '../../lib/money';
+import { CURRENCIES, currencyOf, getHomeCurrency } from '../../lib/currency';
+import { money } from '../../lib/money';
 import { useStore } from '../../lib/store';
-import { cat, CREDIT_CATEGORIES, DEBIT_CATEGORIES, PAY_MODE_LABEL, type CategoryId } from '../../lib/types';
+import { cat, CREDIT_CATEGORIES, DEBIT_CATEGORIES, isForeign, PAY_MODE_LABEL, type CategoryId } from '../../lib/types';
 import { radius, space, usePalette } from '../../theme';
 
 const SOURCE_TEXT = {
@@ -63,6 +64,8 @@ export default function TxnDetail() {
   if (txn.bank || txn.account) details.push([txn.mode === 'card' ? 'Card' : 'Account', [txn.bank, txn.account ? `ending ${txn.account}` : null].filter(Boolean).join(', ')]);
   const review = needsReview(txn);
   if (txn.note) details.push(['Note', txn.note]);
+  const foreign = isForeign(txn);
+  const code = currencyOf(txn);
 
   return (
     <ScrollView
@@ -76,14 +79,23 @@ export default function TxnDetail() {
         <Txt variant="heading" style={{ textAlign: 'center' }}>
           {txn.merchant}
         </Txt>
-        <Txt variant="display" color={credit ? p.income : p.ink} tabular>
+        <Txt variant="display" color={credit ? p.income : p.ink} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ alignSelf: 'stretch', textAlign: 'center' }}>
           {credit ? '+' : ''}
-          {inr(txn.amount, { decimals: true })}
+          {money(txn.amount, { currency: code, decimals: true })}
         </Txt>
         <Txt variant="small" color={p.muted}>
           {credit ? 'Money in' : c.isSaving ? 'Saved' : 'Money out'} · {c.label}
         </Txt>
       </View>
+
+      {foreign ? (
+        <NoticeRow
+          tone="info"
+          icon="earth"
+          title={`Paid in ${CURRENCIES[code].name} (${code})`}
+          body={`Not added to your ${CURRENCIES[getHomeCurrency()].symbol.trim()} totals. Kharcha works offline, so it has no exchange rates.`}
+        />
+      ) : null}
 
       {review ? (
         <View style={{ gap: space.sm }}>

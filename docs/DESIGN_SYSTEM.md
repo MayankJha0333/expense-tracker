@@ -181,6 +181,23 @@ A white ledger line + an arrow in `logoArrow`, on a `logoTile`. Midnight: bright
 
 ---
 
+## Money and currencies
+
+Facts about how amounts work (code: `src/lib/currency.ts`, `src/lib/money.ts`):
+
+- **Every payment can have its own currency**, read from the SMS (₹ / Rs / INR, $ / USD, € , £, AED, S$, CA$, A$, ¥). An Indian bank SMS with no sign means rupees.
+- **One home currency** is used for totals: your pick in Settings → Currency, or Auto (the currency most payments in the last 4 months use), or the phone's region when there are no payments yet.
+- **Totals never mix currencies.** Kharcha is offline and has no exchange rates, so payments in other currencies show in lists with their own sign and a small code tag (USD), and Home shows an info notice: "1 payment in USD · Not in your ₹ totals". Activity gets an "Other currencies" filter only when there are some.
+- **Formatting:** always `money(amount, { currency })`, never a hand-written "₹". Rupees use Indian grouping (₹1,00,570) and no paise except small amounts; other currencies use 3-digit grouping and show cents when there are some ($1,299.99). `moneyCompact` gives ₹1.2L / ₹1.2Cr or $1.2K / $1.2M. Counts use `formatCount`. Dates use `shortDay` ("15 Nov", or "Nov 15" for USD/CAD).
+
+Rules so the UI never breaks:
+
+- Amounts are `tabular` text. Tabular text stays on **one line and shrinks to fit** by default, so a number can never wrap mid-way. Pass `numberOfLines` only when you really want wrapping.
+- Big text (display, title, amount) ignores the phone's extra-large font setting past 1.15–1.25×; body text goes up to 1.6×.
+- Rows with an amount on the right cap the amount at about half the width; the name gets the rest and ends with "…".
+- Percentages are capped: ">9,999%" in text and "999%+" inside the budget ring.
+- Test with the dev-only sample switch in Settings → Currency: **India (₹)**, **US ($)** and **Stress test** (huge, tiny and long values, five currencies, a tiny budget).
+
 ## Adding a colour to a family
 
 1. Add an entry to `MIDNIGHT` or `ELECTRIC` in `src/lib/palette.ts`.

@@ -1,6 +1,8 @@
 import type MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { ComponentProps } from 'react';
 
+import { inHome, type CurrencyCode } from './currency';
+
 export type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 /** Money going out of your account, or coming in. */
@@ -131,11 +133,16 @@ export type Txn = {
   excluded: boolean;
   categorySource: CategorySource;
   note?: string;
+  /** Currency read from the SMS (or picked when added by hand). Missing = the home currency. */
+  currency?: CurrencyCode;
 };
 
-export const countsAsSpend = (t: Txn) => t.type === 'debit' && cat(t.category).countsAsSpend && !t.excluded;
-export const countsAsIncome = (t: Txn) => t.type === 'credit' && cat(t.category).isIncome && !t.excluded;
-export const countsAsSaving = (t: Txn) => t.type === 'debit' && cat(t.category).isSaving && !t.excluded;
+// Totals only add up payments in the home currency (no exchange rates offline).
+export const countsAsSpend = (t: Txn) => t.type === 'debit' && cat(t.category).countsAsSpend && !t.excluded && inHome(t);
+export const countsAsIncome = (t: Txn) => t.type === 'credit' && cat(t.category).isIncome && !t.excluded && inHome(t);
+export const countsAsSaving = (t: Txn) => t.type === 'debit' && cat(t.category).isSaving && !t.excluded && inHome(t);
+/** A payment in another currency: shown in lists, left out of totals. */
+export const isForeign = (t: Txn) => !inHome(t);
 
 /** Where the app's transactions come from. */
 export type DataSource = 'sms' | 'manual' | 'demo';
@@ -181,6 +188,8 @@ export type CardBill = {
   /** Last 4 digits of the card. */
   account: string;
   amountDue: number;
+  /** Missing = the home currency. */
+  currency?: CurrencyCode;
   minDue: number | null;
   /** Midnight at the start of the due day, or null when the SMS gave no date. */
   dueDate: number | null;
