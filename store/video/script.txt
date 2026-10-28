@@ -1,0 +1,10 @@
+[0.6s] Every day, your bank sends you messages about your money.
+[4.0s] A payment here. A bill there. Your salary. Before long, you lose track.
+[8.7s] Meet Kharcha.
+[10.3s] It reads the payment messages from your bank, and sorts every rupee for you, on its own.
+[16.0s] See what you earned, spent, and saved this month, at a glance.
+[20.0s] Find out where your money really goes, month after month.
+[24.0s] Every UPI, card, and cash payment, in one simple list.
+[28.6s] And never miss a credit card bill again.
+[31.6s] Best of all, it's private by design. No sign-up. No server. Your data never leaves your phone.
+[38.8s] Kharcha. Know where your money goes. Coming soon on Google Play.

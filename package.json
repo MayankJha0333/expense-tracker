@@ -38,6 +38,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
+    "build:playstore": "npx eas-cli@latest build --platform android --profile production",
     "prebuild": "expo prebuild --platform android",
     "typecheck": "tsc --noEmit",
     "test:parser": "npx tsx scripts/test-parser.ts",

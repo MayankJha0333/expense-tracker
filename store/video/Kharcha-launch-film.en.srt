@@ -1,0 +1,39 @@
+1
+00:00:00,600 --> 00:00:03,780
+Every day, your bank sends you messages about your money.
+
+2
+00:00:04,000 --> 00:00:08,263
+A payment here. A bill there. Your salary. Before long, you lose track.
+
+3
+00:00:08,700 --> 00:00:09,938
+Meet Kharcha.
+
+4
+00:00:10,300 --> 00:00:15,411
+It reads the payment messages from your bank, and sorts every rupee for you, on its own.
+
+5
+00:00:16,000 --> 00:00:19,355
+See what you earned, spent, and saved this month, at a glance.
+
+6
+00:00:20,000 --> 00:00:23,296
+Find out where your money really goes, month after month.
+
+7
+00:00:24,000 --> 00:00:27,961
+Every UPI, card, and cash payment, in one simple list.
+
+8
+00:00:28,600 --> 00:00:30,944
+And never miss a credit card bill again.
+
+9
+00:00:31,600 --> 00:00:37,665
+Best of all, it's private by design. No sign-up. No server. Your data never leaves your phone.
+
+10
+00:00:38,800 --> 00:00:42,571
+Kharcha. Know where your money goes. Coming soon on Google Play.
