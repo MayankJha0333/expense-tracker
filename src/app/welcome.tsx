@@ -7,6 +7,7 @@ import { SettingsSteps, smsCopy } from '../components/SmsNotice';
 import { LogoTile } from '../components/Logo';
 import { Badge, Button, Icon, Txt } from '../components/ui';
 import { Stagger } from '../components/motion';
+import { SAMPLE_DATA_ENABLED } from '../lib/demo';
 import { openAppSettings, sideloadRestricted, smsSupported } from '../lib/sms';
 import { useStore } from '../lib/store';
 import { cat, type IconName } from '../lib/types';
@@ -142,7 +143,9 @@ export default function Welcome() {
         ) : (
           <Button label={asking ? 'Waiting for your answer…' : 'Allow SMS access'} icon="message-processing-outline" onPress={onAllow} disabled={asking} />
         )}
-        <Button label="Explore with sample data" kind="secondary" icon="flask-outline" onPress={() => chooseSource('demo')} />
+        {SAMPLE_DATA_ENABLED ? (
+          <Button label="Explore with sample data" kind="secondary" icon="flask-outline" onPress={() => chooseSource('demo')} />
+        ) : null}
         <Button label="Add entries by hand instead" kind="quiet" onPress={() => chooseSource('manual')} />
       </View>
 

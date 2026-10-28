@@ -12,7 +12,7 @@ import {
   type CurrencyCode,
   type CurrencySetting,
 } from './currency';
-import { demoExtras, demoInbox, SAMPLE_KINDS, type SampleKind } from './demo';
+import { demoExtras, demoInbox, SAMPLE_DATA_ENABLED, SAMPLE_KINDS, type SampleKind } from './demo';
 import { deviceLocale } from './deviceLocale';
 import { keyOf } from './parser';
 import { processInbox } from './pipeline';
@@ -60,8 +60,8 @@ const LEGACY_KEY = 'kharcha:prefs:v1';
 const CURRENCY_KEY = 'kharcha:currency:v1';
 const SAMPLE_KEY = 'kharcha:sample:v1';
 const AUTO_REFRESH_GAP_MS = 60_000;
-/** `EXPO_PUBLIC_DEMO=1 npx expo start` opens straight into sample data. */
-const FORCE_DEMO = process.env.EXPO_PUBLIC_DEMO === '1';
+/** `EXPO_PUBLIC_DEMO=1 npx expo start` opens straight into sample data (development builds only). */
+const FORCE_DEMO = SAMPLE_DATA_ENABLED && process.env.EXPO_PUBLIC_DEMO === '1';
 
 export type Status = 'booting' | 'onboarding' | 'loading' | 'ready';
 
@@ -248,7 +248,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // First start: load saved data, then decide where transactions come from.
   useEffect(() => {
     (async () => {
-      const { prefs: loaded, ok } = await loadPrefs();
+      const { prefs: stored, ok } = await loadPrefs();
+      // A release build never opens sample data, even if a development build saved that choice.
+      const loaded = !SAMPLE_DATA_ENABLED && stored.source === 'demo' ? { ...stored, source: null } : stored;
       canSave.current = ok;
       setSaved(loaded);
       try {
@@ -323,6 +325,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const chooseSource = useCallback(
     (next: 'manual' | 'demo') => {
       if (next === 'demo') {
+        if (!SAMPLE_DATA_ENABLED) return;
         // Remember the choice so the next launch opens the sample again.
         setSaved((x) => ({ ...x, source: 'demo' }));
         startDemo();

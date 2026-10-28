@@ -42,7 +42,6 @@ export const POLICY: PolicySection[] = [
       'What you type in is saved in Kharcha\'s private app storage on this phone. Android keeps this storage separate from other apps. Kharcha does not add its own encryption on top of the encryption Android provides for the device.',
       'It stays until you delete it: use Settings → Delete all my data, clear the app\'s storage in Android Settings, or uninstall Kharcha.',
       'Android cloud backup and device-to-device transfer are turned off for Kharcha, so a copy is not made in Google Drive. This also means your entries do not move to a new phone.',
-      'Sample data ("Explore with sample data") is made up, lives only in memory and is never saved.',
     ],
   },
   {

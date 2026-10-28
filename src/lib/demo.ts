@@ -6,6 +6,12 @@ import type { Goal, Txn } from './types';
 export type SampleKind = 'india' | 'us' | 'stress';
 export const SAMPLE_KINDS: SampleKind[] = ['india', 'us', 'stress'];
 
+/**
+ * Sample (made-up) data is a development tool. Release builds never offer it:
+ * people only see payments from their own SMS and entries they add by hand.
+ */
+export const SAMPLE_DATA_ENABLED = typeof __DEV__ !== 'undefined' && __DEV__;  // `__DEV__` is missing when tests run in plain Node.
+
 /*
  * Sample data for "Explore with sample data" (and EXPO_PUBLIC_DEMO=1).
  * It is made of real-looking bank SMS that go through the real parser, so the

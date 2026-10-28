@@ -36,8 +36,6 @@ It stays until you delete it: use Settings → Delete all my data, clear the app
 
 Android cloud backup and device-to-device transfer are turned off for Kharcha, so a copy is not made in Google Drive. This also means your entries do not move to a new phone.
 
-Sample data ("Explore with sample data") is made up, lives only in memory and is never saved.
-
 ## Internet and sharing
 
 Kharcha does not send your messages, payments or anything you type to any server. It has no server to send them to.

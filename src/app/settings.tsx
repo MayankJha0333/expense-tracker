@@ -10,7 +10,7 @@ import { SmsNotice } from '../components/SmsNotice';
 import { Button, Card, Chip, Divider, Icon, ListRow, SectionHeader, Segmented, Tag, Txt } from '../components/ui';
 import { PressScale, Stagger } from '../components/motion';
 import { CURRENCIES, CURRENCY_CODES } from '../lib/currency';
-import type { SampleKind } from '../lib/demo';
+import { SAMPLE_DATA_ENABLED, type SampleKind } from '../lib/demo';
 import { installInfo, smsSupported } from '../lib/sms';
 import { useStore } from '../lib/store';
 import type { IconName } from '../lib/types';
@@ -127,7 +127,9 @@ export default function Settings() {
           ) : (
             <>
               <SmsNotice />
-              <Button label="Explore with sample data" kind="secondary" icon="flask-outline" onPress={() => chooseSource('demo')} />
+              {SAMPLE_DATA_ENABLED ? (
+                <Button label="Explore with sample data (dev)" kind="secondary" icon="flask-outline" onPress={() => chooseSource('demo')} />
+              ) : null}
             </>
           )}
 
@@ -268,7 +270,7 @@ function CurrencySection() {
         <Txt variant="small" color={p.muted}>
           Auto uses the currency most of your payments are in. Payments in other currencies still show in your lists, but they are not added to totals, because Kharcha has no exchange rates offline.
         </Txt>
-        {__DEV__ && source === 'demo' ? (
+        {SAMPLE_DATA_ENABLED && source === 'demo' ? (
           <View style={{ gap: space.sm }}>
             <Txt variant="smallStrong">Sample data (development build only)</Txt>
             <View style={styles.chipWrap}>
