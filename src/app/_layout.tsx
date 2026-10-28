@@ -8,6 +8,7 @@ import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { currencyLayout } from '../components/CurrencyScope';
+import { UpdateGate } from '../components/UpdateGate';
 import { StoreProvider } from '../lib/store';
 import { ThemeProvider, usePalette, useTheme } from '../theme';
 
@@ -63,6 +64,8 @@ function AppShell() {
           <Stack.Screen name="privacy" />
           <Stack.Screen name="design-system" />
         </Stack>
+        {/* Covers everything when the Play Store has a new major version. */}
+        <UpdateGate />
       </StoreProvider>
     </SafeAreaProvider>
   );

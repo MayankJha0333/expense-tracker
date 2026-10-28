@@ -40,6 +40,8 @@ Android cloud backup and device-to-device transfer are turned off for Kharcha, s
 
 Kharcha does not send your messages, payments or anything you type to any server. It has no server to send them to.
 
+To see whether a newer version is out, Kharcha asks the Google Play Store app on your phone. Google Play answers from its own records; Kharcha does not send your messages, payments or entries with this check. If a required update is out, Kharcha asks you to update before you continue.
+
 Kharcha has no analytics, crash reporting, advertising or tracking code. Fonts and icons are built into the app, so nothing is downloaded.
 
 We do not sell, share or receive your data, because it never leaves your phone through Kharcha.

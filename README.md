@@ -94,3 +94,7 @@ scripts/test-parser.ts     sample bank SMS checks
 - Google Play only allows `READ_SMS` for approved uses. Pick **"SMS based money management"** in Play Console's Permissions Declaration Form, and make SMS tracking the main feature in your store listing.
 - Add a privacy policy that says SMS is read only on the device and never uploaded.
 - For your own phone you don't need any of this. Just install with `npx expo run:android`, or build an APK with `npx eas-cli build -p android --profile preview`.
+
+## Releasing
+
+Build numbers, forced major updates and how to test them: [docs/RELEASING.md](docs/RELEASING.md).

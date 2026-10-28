@@ -48,6 +48,7 @@ export const POLICY: PolicySection[] = [
     title: 'Internet and sharing',
     body: [
       'Kharcha does not send your messages, payments or anything you type to any server. It has no server to send them to.',
+      'To see whether a newer version is out, Kharcha asks the Google Play Store app on your phone. Google Play answers from its own records; Kharcha does not send your messages, payments or entries with this check. If a required update is out, Kharcha asks you to update before you continue.',
       'Kharcha has no analytics, crash reporting, advertising or tracking code. Fonts and icons are built into the app, so nothing is downloaded.',
       'We do not sell, share or receive your data, because it never leaves your phone through Kharcha.',
       'Android and Google Play may collect their own information about apps on your phone (for example, crash reports if you have chosen to share usage and diagnostics with Google). That is covered by Google\'s privacy policy, not this one.',

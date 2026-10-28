@@ -9,6 +9,7 @@
     "backgroundColor": "#0A0A0B",
     "android": {
       "package": "com.mayankjha.kharcha",
+      "versionCode": 1001,
       "adaptiveIcon": {
         "backgroundColor": "#2E3FE6",
         "foregroundImage": "./assets/android-icon-foreground.png",
