@@ -14,22 +14,63 @@ Built with **React Native + Expo (SDK 58)**, Expo Router, Reanimated, and a smal
 
 ## Screenshots
 
-<p align="center">
-  <img src="store/android/screenshot-1.png" alt="Home: saved this month, money in and out, card bills due, where it went" width="250">
-  <img src="store/android/screenshot-2.png" alt="Insights: spending, income and savings over the last 6 months" width="250">
-  <img src="store/android/screenshot-3.png" alt="Activity: every payment in one searchable list" width="250">
-</p>
-<p align="center">
-  <img src="store/android/screenshot-4.png" alt="Accounts: how you paid, and each credit card's bill and due date" width="250">
-  <img src="store/android/screenshot-5.png" alt="Credit card: statement, total due, minimum due and spending since the statement" width="250">
-  <img src="store/android/screenshot-6.png" alt="Dark theme: private by design, no account and no server" width="250">
-</p>
+Every screen comes in a light and a dark theme. Pick **Auto** (follows your phone), **Light** or **Dark** in Settings, plus an accent colour for each.
 
-| Home | Insights | Activity | Accounts | Credit card | Dark theme |
-| --- | --- | --- | --- | --- | --- |
-| This month at a glance | 6 months of spending, income and savings | Every payment, searchable | How you paid, each card | Bill, due date, minimum due | Private by design |
+<table>
+  <tr>
+    <th></th>
+    <th>Home</th>
+    <th>Insights</th>
+    <th>Activity</th>
+  </tr>
+  <tr>
+    <th>Light</th>
+    <td><img src="docs/screenshots/light/home.png" alt="Home in light theme: saved this month, money in and out, card bills due" width="240"></td>
+    <td><img src="docs/screenshots/light/insights.png" alt="Insights in light theme: spending over the last 6 months" width="240"></td>
+    <td><img src="docs/screenshots/light/activity.png" alt="Activity in light theme: every payment by day" width="240"></td>
+  </tr>
+  <tr>
+    <th>Dark</th>
+    <td><img src="docs/screenshots/dark/home.png" alt="Home in dark theme" width="240"></td>
+    <td><img src="docs/screenshots/dark/insights.png" alt="Insights in dark theme" width="240"></td>
+    <td><img src="docs/screenshots/dark/activity.png" alt="Activity in dark theme" width="240"></td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>This month at a glance</td>
+    <td>Spending, income and savings over 6 months</td>
+    <td>Every payment, searchable</td>
+  </tr>
+</table>
 
-Screenshots use sample data, not a real person's messages.
+<table>
+  <tr>
+    <th></th>
+    <th>Where your money went</th>
+    <th>Credit cards</th>
+    <th>Investments</th>
+  </tr>
+  <tr>
+    <th>Light</th>
+    <td><img src="docs/screenshots/light/flow.png" alt="Where your money went in light theme: saved vs. cash in your accounts" width="240"></td>
+    <td><img src="docs/screenshots/light/cards.png" alt="Credit cards in light theme: what you owe and when each bill is due" width="240"></td>
+    <td><img src="docs/screenshots/light/investments.png" alt="Investments in light theme: SIPs month by month" width="240"></td>
+  </tr>
+  <tr>
+    <th>Dark</th>
+    <td><img src="docs/screenshots/dark/flow.png" alt="Where your money went in dark theme" width="240"></td>
+    <td><img src="docs/screenshots/dark/cards.png" alt="Credit cards in dark theme" width="240"></td>
+    <td><img src="docs/screenshots/dark/investments.png" alt="Investments in dark theme" width="240"></td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Why your bank balance differs from "money out"</td>
+    <td>What you owe, due dates, days left</td>
+    <td>SIPs, next dates, missing SIP messages</td>
+  </tr>
+</table>
+
+Screenshots use the app's built-in sample data, not a real person's messages. Play Store images are in [`store/android/`](store/android/).
 
 ---
 
@@ -69,7 +110,8 @@ Screenshots use sample data, not a real person's messages.
 - **Your month can start on any day** (1st to 28th), for example the day your salary comes in.
 - **Your corrections always win:** change a category once and it applies to every payment from that shop or person.
 - **Cash expenses** you add by hand, for things the bank never sees.
-- Light and dark themes, and multiple currencies (payments in another currency are shown but kept out of totals).
+- **Light, dark or Auto** (follows your phone), with four accent colours for each theme.
+- Multiple currencies (payments in another currency are shown but kept out of totals).
 
 ---
 
