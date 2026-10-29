@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="store/android/feature-graphic.png" alt="Kharcha: expenses tracked on their own. Reads your bank SMS on your phone. No sign-up. Nothing uploaded." width="820">
+</p>
+
 # Kharcha
 
 **An Android expense tracker that reads your bank SMS on your phone, and nowhere else.**
@@ -5,6 +9,27 @@
 Kharcha turns bank and card messages into a clear picture of your money: what you spent, what came in, what you saved, what you owe on credit cards, and where every rupee went. No account, no server, no bank login. Nothing you track ever leaves the phone.
 
 Built with **React Native + Expo (SDK 58)**, Expo Router, Reanimated, and a small native Kotlin module that reads the SMS inbox.
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="store/android/screenshot-1.png" alt="Home: saved this month, money in and out, card bills due, where it went" width="250">
+  <img src="store/android/screenshot-2.png" alt="Insights: spending, income and savings over the last 6 months" width="250">
+  <img src="store/android/screenshot-3.png" alt="Activity: every payment in one searchable list" width="250">
+</p>
+<p align="center">
+  <img src="store/android/screenshot-4.png" alt="Accounts: how you paid, and each credit card's bill and due date" width="250">
+  <img src="store/android/screenshot-5.png" alt="Credit card: statement, total due, minimum due and spending since the statement" width="250">
+  <img src="store/android/screenshot-6.png" alt="Dark theme: private by design, no account and no server" width="250">
+</p>
+
+| Home | Insights | Activity | Accounts | Credit card | Dark theme |
+| --- | --- | --- | --- | --- | --- |
+| This month at a glance | 6 months of spending, income and savings | Every payment, searchable | How you paid, each card | Bill, due date, minimum due | Private by design |
+
+Screenshots use sample data, not a real person's messages.
 
 ---
 
