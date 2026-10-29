@@ -1,100 +1,168 @@
 # Kharcha
 
-An Android expense tracker that reads your bank SMS, skips OTPs and offers, and sorts every payment into a category on its own.
+**An Android expense tracker that reads your bank SMS on your phone, and nowhere else.**
 
-Built with **React Native + Expo** (SDK 58) and a small native module for reading SMS.
+Kharcha turns bank and card messages into a clear picture of your money: what you spent, what came in, what you saved, what you owe on credit cards, and where every rupee went. No account, no server, no bank login. Nothing you track ever leaves the phone.
 
----
-
-## Run it on your phone
-
-You need:
-- Node.js 20 or newer
-- Android Studio (for the Android SDK), or just the SDK + platform tools
-- An Android phone with **USB debugging** on, or an emulator
-
-Steps:
-
-1. Install packages
-   ```bash
-   npm install
-   ```
-2. Plug in your phone, then build and install the app
-   ```bash
-   npx expo run:android
-   ```
-   The first build takes a few minutes. After that, code changes reload instantly.
-3. Open the app and tap **Allow SMS access**.
-
-> **Why not Expo Go?** Expo Go can't read SMS. That needs native Android code, which lives in `modules/sms-reader`. `npx expo run:android` makes a "development build" (your own version of Expo Go that includes it).
-
-### See it with sample data
-
-Turned off for now in every build. To bring it back for development builds, set `SAMPLE_DATA_ENABLED` in `src/lib/demo.ts` (the comment there shows how); then tap **Explore with sample data** on the welcome screen or in Settings.
-
-Sample data runs about 120 sample bank messages through the real SMS reader, including fake OTPs and offers that get thrown away.
+Built with **React Native + Expo (SDK 58)**, Expo Router, Reanimated, and a small native Kotlin module that reads the SMS inbox.
 
 ---
 
-## What the app does
+## What it does
 
+### Tracks every payment on its own
+- Reads bank, card and UPI messages from the last 13 months, and keeps reading new ones.
+- Skips OTPs, offers, reminders, failed payments and money requests.
+- Finds the amount, the shop or person, the account or card, and how you paid (UPI, card, ATM, net banking).
+- Puts each payment in a category (Food, Groceries, Rent, Bills, Software & online, Cook & house help…).
+- Works with HDFC, SBI, ICICI, Axis, Kotak, IDFC, slice, Paytm and most Indian banks.
+
+### Counts money correctly, without counting anything twice
+- **Moving money between your own accounts** (HDFC → slice) is not spending or income.
+- **Paying a credit card bill** is not spending again: the shopping counted the day you bought it.
+- **Refunds** are taken off the purchase they belong to.
+- **Money paid back to you** (a company reimbursing a work expense) cancels the expense.
+- **SIPs and investments** count as savings, not spending.
+- **Loans:** money lent or borrowed is neither spending nor income.
+- **"Paid twice?"**: the same bill paid from two accounts on the same day is flagged for you to check.
+
+### Shows the full picture
 | Screen | What you see |
 | --- | --- |
-| **Home** | Money spent this month, the change from last month, the category split, a calendar shaded by daily spending, top categories, and the latest payments |
-| **Activity** | Every payment, grouped by day, with search and filters (Spent, Received, Not counted) |
-| **Insights** | Last 6 months, per-day average, biggest spend, every category with its change from last month, the shops you spend most at, how you paid (UPI, card, ATM) and your spending by day of the week |
-| **Payment details** | The amount, account, the original SMS, and a category picker ("use for all Swiggy payments"), plus a switch to stop counting it |
-| **Add cash expense** | For things the bank never sees: chai, auto, vegetables |
+| **Home** | Money in, money out and saved this month, credit card bills due, top categories, latest payments |
+| **Activity** | Every payment by day, with search and filters, and payments that need a look |
+| **Insights** | Spending, income and savings over 6 months, categories, top shops, who paid you, day of the week |
+| **Accounts** | How you paid, each bank account and card, credit card bills |
+| **Where your money went** | Why your bank balance differs from "money out": card bills, own-account moves, investments, and each account's change |
+| **Credit cards** | What you owe now, each bill's due date and days left, which payment paid it, payments to check |
+| **Investments** | SIPs by month, each SIP's usual day and next date, scheduled SIPs with no payment message |
+| **Who you pay** | Tag a person once (room rent, cook, family, lent money…) and all their payments move to the right place |
+| **Payment details** | The original SMS, category, links to related payments, and a switch to leave it out |
+| **Goals and budget** | Savings goals and a monthly spending limit with daily pace |
+
+### Fits how you live
+- **Your month can start on any day** (1st to 28th), for example the day your salary comes in.
+- **Your corrections always win:** change a category once and it applies to every payment from that shop or person.
+- **Cash expenses** you add by hand, for things the bank never sees.
+- Light and dark themes, and multiple currencies (payments in another currency are shown but kept out of totals).
 
 ---
 
-## How the SMS reading works
+## Privacy
 
-1. **Native module** (`modules/sms-reader`): reads the inbox from the last 13 months. Messages from personal phone numbers (+91 98…) are dropped right here, so your chats never reach the app code.
-2. **Parser** (`src/lib/parser.ts`): for each message it
-   - skips **OTPs** ("123456 is your OTP…", "OTP for txn of Rs 500…")
-   - skips **offers**, **bill-due reminders**, **failed payments** and **money requests**
-   - keeps only messages that have an amount, a word like "debited / credited / spent / sent", and an account or known bank sender
-   - pulls out the amount, money in or out, the shop or person, the account's last 4 digits, and the payment mode (UPI, card, ATM…)
-3. **Categories** (`src/lib/categorize.ts`): keyword matching (Swiggy → Food, Blinkit → Groceries, BESCOM → Bills…). Credit card bill payments and self transfers are **not counted** as spending, so the same money isn't added twice.
-4. **Your corrections win** (`src/lib/store.tsx`): change a category once and it can apply to every payment from that shop. Saved on the phone with AsyncStorage.
+- SMS is read **only on the phone**. Messages from personal numbers are dropped inside the native module, so chats never reach the app code.
+- No account, no analytics, no server. Your corrections, goals and cash entries are saved in the app's private storage on the phone.
+- Full policy: [PRIVACY.md](PRIVACY.md) (also shown in the app under Settings).
 
-Works with HDFC, SBI, ICICI, Axis, Kotak, IDFC, Paytm and most other Indian banks. To add a shop, edit the keyword lists in `src/lib/categorize.ts`.
+---
 
-Check the parser any time:
+## Run it
+
+You need Node.js 20+, the Android SDK (Android Studio or just the SDK and platform tools), and an Android phone with **USB debugging** on, or an emulator.
+
 ```bash
-npm run test:parser
+npm install
+npx expo run:android      # builds and installs a development build; later changes reload instantly
 ```
+
+Open the app and tap **Allow SMS access**.
+
+> **Why not Expo Go?** Expo Go can't read SMS. That needs the native code in `modules/sms-reader`, so `npx expo run:android` makes a development build that includes it.
+
+To install it next to the Play Store version, build with `APP_VARIANT=development` (the EAS `development` profile does this): it installs as **Kharcha Dev** (`com.mayankjha.kharcha.dev`, see `app.config.ts`).
+
+### Try it with your own SMS on an emulator
+
+For checking the reader against real messages without changing app code:
+
+1. Export your inbox with `adb` into `private/sms-dump.txt` (the steps are at the top of `scripts/scan-sms.ts`).
+2. `npm run scan:sms` writes what it found to `private/` (parsed payments, possible misses, and an inbox for the emulator).
+3. Development builds can load that inbox from the debugger.
+
+`private/` is git-ignored. Never commit it.
+
+---
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `npm run android` | Build and run on a phone or emulator |
+| `npm test` | All checks: SMS reader, tracking, currency, updates, money flow, months, cards, investments |
+| `npm run typecheck` | TypeScript check |
+| `npm run lint` | Lint |
+| `npm run scan:sms` | Run the SMS reader over an exported inbox (see above) |
+| `npm run release:patch` | Release a new version to Google Play (see Releasing) |
+
+Single test files: `test:parser`, `test:tracking`, `test:currency`, `test:update`, `test:flows`, `test:month`, `test:cards`, `test:invest`.
+
+---
+
+## How it works
+
+```
+SMS inbox ──► native module ──► parser ──► categories ──► pipeline ──► your corrections ──► money flow ──► screens
+              (drops personal    (amount,     (keywords)    (duplicates,   (rules, tags,          (transfers,
+               numbers)           shop, card)                card bills,    links you made)         refunds,
+                                                             SIP notices)                           pay-backs)
+```
+
+| File | Job |
+| --- | --- |
+| `modules/sms-reader/` | Native Kotlin module: reads the inbox, drops personal numbers |
+| `src/lib/parser.ts` | Reads one SMS: amount, money in or out, shop or person, account, payment mode; card bills; scheduled SIPs |
+| `src/lib/categorize.ts` | Picks a category from the shop name and message words |
+| `src/lib/pipeline.ts` | Whole inbox → payments, card bills and scheduled payments; removes repeats |
+| `src/lib/store.tsx` | App state; applies your corrections (rules, tags, links); saved with AsyncStorage |
+| `src/lib/flows.ts` | Links related payments: own-account transfers, card bills, refunds, pay-backs, double payments |
+| `src/lib/analytics.ts` | Monthly totals, trends, budget pace, custom month start |
+| `src/lib/accounts.ts` | Accounts and cards, credit card bills and dues |
+| `src/lib/moneyflow.ts` | Saved vs. cash in your accounts, each account's change |
+| `src/lib/investments.ts` | SIPs, investment months, scheduled SIPs without a payment message |
+| `src/lib/purposes.ts` | "What do you pay this person for?" tags |
+| `docs/MONEY_FLOW.md` | The linking rules in detail |
+
+To teach it a new shop, add it to the keyword lists in `src/lib/categorize.ts` and add a test case in `scripts/test-parser.ts`.
 
 ---
 
 ## Project layout
 
 ```
-modules/sms-reader/        native Kotlin module that reads the SMS inbox
-src/app/                   screens (Expo Router)
-  (tabs)/index.tsx         Home
-  (tabs)/activity.tsx      Activity
-  (tabs)/insights.tsx      Insights
-  txn/[id].tsx             payment details
-  add.tsx                  add cash expense
-  category/[id].tsx        one category, one month
-  day/[date].tsx           one day
-  welcome.tsx              permission screen
-src/lib/                   parser, categories, numbers, data store
-src/components/            calendar, bars, rows, chips
-src/theme.ts               colours and type
-scripts/test-parser.ts     sample bank SMS checks
+modules/sms-reader/     native module that reads SMS
+src/app/                screens (Expo Router)
+  (tabs)/               Home, Activity, Insights, Accounts
+  txn/[id].tsx          payment details      link/[id].tsx    link two payments
+  category/[id].tsx     one category         day/[date].tsx   one day
+  account/[key].tsx     one account or card  cards.tsx        credit cards
+  flow.tsx              where your money went
+  investments.tsx       SIPs and investments people.tsx       who you pay
+  goals.tsx, goal.tsx, budget.tsx, add.tsx, settings.tsx, privacy.tsx, welcome.tsx
+src/components/         shared UI: rows, charts, cards, pickers, update gate
+src/lib/                everything that isn't UI (see "How it works")
+scripts/                tests, SMS scan, release and version tools
+docs/                   releasing, Play Console, money flow, design system
+store/                  Play Store listing graphics and video
 ```
 
 ---
 
-## Before putting it on the Play Store
-
-- Google Play only allows `READ_SMS` for approved uses. Pick **"SMS based money management"** in Play Console's Permissions Declaration Form, and make SMS tracking the main feature in your store listing.
-- Add a privacy policy that says SMS is read only on the device and never uploaded.
-- For your own phone you don't need any of this. Just install with `npx expo run:android`, or build an APK with `npx eas-cli build -p android --profile preview`.
-
 ## Releasing
 
-Build numbers, forced major updates and how to test them: [docs/RELEASING.md](docs/RELEASING.md).
+```bash
+npm run release:patch    # 1.0.3 → 1.0.4   bug fixes and small features
+npm run release:minor    # 1.0.4 → 1.1.0   bigger features
+npm run release:major    # 1.x   → 2.0.0   asks everyone to update
+```
+
+Each command raises the version in `app.json`, `package.json` and `package-lock.json`, commits "Release x.y.z", tags it and pushes. The tag starts the GitHub release workflow: checks → EAS build → upload to Google Play internal testing. Then roll it out in Play Console.
+
+Build-number rules, forced updates and the Play Console steps: [docs/RELEASING.md](docs/RELEASING.md) and [docs/PLAY_CONSOLE.md](docs/PLAY_CONSOLE.md).
+
+**Google Play and SMS:** Play only allows `READ_SMS` for approved uses. Kharcha is declared as **SMS-based money management**, with SMS tracking as its main feature.
+
+---
+
+## License
+
+[MIT](LICENSE) © 2026 Mayank Jha
