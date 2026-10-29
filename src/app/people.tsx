@@ -9,7 +9,7 @@ import { Empty, Segmented, Tag, Txt } from '../components/ui';
 import { money } from '../lib/money';
 import { canHavePurpose, purpose } from '../lib/purposes';
 import { useStore } from '../lib/store';
-import type { Txn } from '../lib/types';
+import type { Txn, TxnType } from '../lib/types';
 import { space, usePalette } from '../theme';
 
 /** How far back to look for people you pay. */
@@ -26,6 +26,7 @@ export default function PeopleScreen() {
   const insets = useSafeAreaInsets();
   const { txns } = useStore();
   const [show, setShow] = useState<'todo' | 'all'>('todo');
+  const [side, setSide] = useState<TxnType>('debit');
   // Fixed when the screen opens, so a person you just sorted stays in place instead of jumping away.
   const [openedAt] = useState(() => Date.now());
 
@@ -34,13 +35,15 @@ export default function PeopleScreen() {
     const map = new Map<string, Person>();
     for (const t of txns) {
       if (t.timestamp < since || !canHavePurpose(t)) continue;
-      const hit = map.get(t.merchantKey);
+      // Money in and money out are tagged apart (you lend to someone, they pay you back).
+      const key = `${t.type}:${t.merchantKey}`;
+      const hit = map.get(key);
       if (hit) {
         hit.count += 1;
         hit.total += t.amount;
         if (t.timestamp > hit.latest.timestamp) hit.latest = t;
       } else {
-        map.set(t.merchantKey, { key: t.merchantKey, name: t.merchant, latest: t, count: 1, total: t.amount });
+        map.set(key, { key, name: t.merchant, latest: t, count: 1, total: t.amount });
       }
     }
     return [...map.values()].sort((a, b) => b.total - a.total);
@@ -48,8 +51,10 @@ export default function PeopleScreen() {
 
   // Which people were still unsorted when you opened the screen: they stay listed while you sort them.
   const [todoKeys] = useState(() => new Set(people.filter((x) => !x.latest.purpose).map((x) => x.key)));
-  const sorted = people.filter((x) => x.latest.purpose).length;
-  const shown = show === 'todo' ? people.filter((x) => todoKeys.has(x.key)) : people;
+  const onSide = people.filter((x) => x.latest.type === side);
+  const sorted = onSide.filter((x) => x.latest.purpose).length;
+  const shown = show === 'todo' ? onSide.filter((x) => todoKeys.has(x.key)) : onSide;
+  const paying = side === 'debit';
 
   return (
     <FlatList
@@ -61,12 +66,22 @@ export default function PeopleScreen() {
         <View style={{ gap: space.md, paddingBottom: space.sm }}>
           <ScreenHeader />
           <Txt variant="title" accessibilityRole="header">
-            Who you pay
+            {paying ? 'Who you pay' : 'Who pays you'}
           </Txt>
           <Txt variant="small" color={p.muted}>
-            Money sent to a person shows as &quot;Sent to people&quot;. Tell us what it is for, like room rent or the cook, and all their payments move to the
-            right place. Last 6 months, biggest first.
+            {paying
+              ? 'Tell us what you pay each person for, like room rent, the cook, or money you lent. All their payments move to the right place. Lent money and loan repayments are not counted as spending.'
+              : 'Tell us why each person paid you, like lent money coming back, a loan, or interest. Only real income is counted as money in.'}{' '}
+            Last 6 months, biggest first.
           </Txt>
+          <Segmented
+            options={[
+              { id: 'debit', label: 'You paid' },
+              { id: 'credit', label: 'Paid you' },
+            ]}
+            value={side}
+            onChange={setSide}
+          />
           <Segmented
             options={[
               { id: 'todo', label: 'To sort' },
@@ -80,8 +95,8 @@ export default function PeopleScreen() {
       ListEmptyComponent={
         <Empty
           icon="account-check-outline"
-          title={show === 'todo' ? 'Everyone is sorted' : 'No payments to people'}
-          body={show === 'todo' ? 'Nice. New people you pay will show up here.' : 'Money you send to a person will show up here.'}
+          title={show === 'todo' ? 'Everyone is sorted' : paying ? 'No payments to people' : 'No money from people'}
+          body={show === 'todo' ? 'Nice. New people will show up here.' : paying ? 'Money you send to a person will show up here.' : 'Money a person sends you will show up here.'}
         />
       }
       renderItem={({ item }) => <PersonRow person={item} />}

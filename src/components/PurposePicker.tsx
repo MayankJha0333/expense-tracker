@@ -2,14 +2,15 @@ import * as Haptics from 'expo-haptics';
 import { useRef } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { PURPOSES } from '../lib/purposes';
+import { purposesFor } from '../lib/purposes';
 import { useStore } from '../lib/store';
 import type { PurposeId, Txn } from '../lib/types';
 import { space } from '../theme';
 import { Chip } from './ui';
 
 /**
- * "Room rent", "Cook", "Family"... for a person you pay. Picking one moves every
+ * "Room rent", "Cook", "Lent money"... for a person you pay, or "Lent money back",
+ * "Interest received"... for a person who paid you. Picking one moves every
  * payment to them into the matching category. Tap the picked one again to clear it.
  * [row] = one line that scrolls sideways (for lists); otherwise the chips wrap.
  */
@@ -24,7 +25,7 @@ export function PurposePicker({ txn, row }: { txn: Txn; row?: boolean }) {
     Haptics.selectionAsync().catch(() => {});
     setPurpose(txn, txn.purpose === id ? null : id);
   };
-  const chips = PURPOSES.map((x) => (
+  const chips = purposesFor(txn.type).map((x) => (
     <Chip
       key={x.id}
       label={x.label}

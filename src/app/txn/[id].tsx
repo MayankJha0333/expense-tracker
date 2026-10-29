@@ -45,6 +45,7 @@ export default function TxnDetail() {
   const credit = txn.type === 'credit';
   const options = credit ? CREDIT_CATEGORIES : DEBIT_CATEGORIES;
   const sameShop = txns.filter((t) => t.merchantKey === txn.merchantKey && t.id !== txn.id && !t.isManual).length;
+  const samePerson = txns.filter((t) => t.merchantKey === txn.merchantKey && t.type === txn.type && t.id !== txn.id && !t.isManual).length;
   const notCountable = !credit && !c.countsAsSpend;
   const countLabel = c.isSaving ? 'Count in my savings' : credit ? 'Count as money in' : 'Count in my spending';
 
@@ -116,7 +117,7 @@ export default function TxnDetail() {
             title={credit ? 'Is this really income?' : "We weren't sure what this was"}
             body={
               credit
-                ? 'Money from a person may be a friend paying you back. If so, turn off "Count as money in" below.'
+                ? 'Money from a person may be a friend paying you back, lent money coming back, or a loan. Pick why below so it is not counted as income.'
                 : 'Pick the right category below, or confirm it if "Other" is right.'
             }
           />
@@ -148,14 +149,17 @@ export default function TxnDetail() {
 
       {canHavePurpose(txn) ? (
         <View style={{ gap: space.md }}>
-          <Txt variant="heading">What do you pay {txn.merchant} for?</Txt>
+          <Txt variant="heading">{credit ? `Why did ${txn.merchant} pay you?` : `What do you pay ${txn.merchant} for?`}</Txt>
           <Txt variant="small" color={p.muted}>
-            {sameShop > 0
-              ? `Pick once. This and the other ${sameShop} ${sameShop === 1 ? 'payment' : 'payments'} to them move to the right place, and new ones too.`
-              : 'Pick once. Future payments to them go to the right place too.'}
+            {samePerson > 0
+              ? `Pick once. This and the other ${samePerson} ${samePerson === 1 ? 'payment' : 'payments'} ${credit ? 'from' : 'to'} them move to the right place, and new ones too.`
+              : `Pick once. Future payments ${credit ? 'from' : 'to'} them go to the right place too.`}
+            {credit ? ' Lent money back, a loan, or a friend paying back is not counted as income.' : ' Lent money and loan repayments are not counted as spending.'}
           </Txt>
           <PurposePicker txn={txn} />
-          <Button label="Sort everyone you pay" icon="account-multiple-check-outline" kind="quiet" compact onPress={() => router.push('/people')} />
+          {credit ? null : (
+            <Button label="Sort everyone you pay" icon="account-multiple-check-outline" kind="quiet" compact onPress={() => router.push('/people')} />
+          )}
         </View>
       ) : null}
 

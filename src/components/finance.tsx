@@ -54,7 +54,7 @@ export function TxnRow({ txn, showDate }: { txn: Txn; showDate?: boolean }) {
     ? shortDay(txn.timestamp)
     : timeLabel(txn.timestamp);
   const pay = payLabel(txn);
-  const label = flow ?? (counted ? kindLabel(txn, c.label) : 'Not counted');
+  const label = flow ?? (txn.purpose ? kindLabel(txn, c.label) : counted ? c.label : 'Not counted');
   return (
     <PressScale
       onPress={() => router.push(`/txn/${txn.id}`)}

@@ -285,12 +285,13 @@ export function needsReview(t: Txn): boolean {
 
 /* ---------- money in that is not income ---------- */
 
-export type NotCountedReason = 'self_transfer' | 'card_bill' | 'refund_linked' | 'excluded' | 'other';
+export type NotCountedReason = 'self_transfer' | 'card_bill' | 'refund_linked' | 'loans' | 'excluded' | 'other';
 
 export const NOT_COUNTED_LABEL: Record<NotCountedReason, string> = {
   self_transfer: 'Moved between your own accounts',
   card_bill: 'Credit card bill payments',
   refund_linked: 'Refunds taken off what you bought',
+  loans: 'Loans: lent money back, or borrowed',
   excluded: 'Left out by you',
   other: 'Other money in',
 };
@@ -309,6 +310,8 @@ export function notCountedIncome(txns: Txn[]): { total: number; rows: NotCounted
         ? 'refund_linked'
         : t.category === 'self_transfer'
         ? 'self_transfer'
+        : t.category === 'loans'
+        ? 'loans'
         : t.category === 'card_bill'
           ? 'card_bill'
           : 'other';

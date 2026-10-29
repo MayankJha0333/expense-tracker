@@ -35,6 +35,7 @@ export type CategoryId =
   | 'house_help'
   | 'family'
   | 'software'
+  | 'loans'
   | 'investments'
   | 'emi'
   | 'cash'
@@ -101,6 +102,8 @@ export const CATEGORIES: CategoryInfo[] = [
   c('other', 'Other', '#B0A48E', 'dots-horizontal-circle-outline'),
   c('card_bill', 'Card bill payment', '#9AA3A9', 'credit-card-check-outline', 'neutral'),
   c('self_transfer', 'Self transfer', '#8C979E', 'swap-horizontal', 'neutral'),
+  // Money lent or borrowed between people: it comes back, so it is neither spending nor income.
+  c('loans', 'Loans & lending', '#A08C5B', 'handshake-outline', 'neutral'),
   c('salary', 'Salary', '#2E8B6A', 'briefcase-outline', 'income'),
   c('refund', 'Refund & cashback', '#48A37E', 'cash-refund', 'income'),
   c('interest', 'Interest', '#5DB28F', 'percent-outline', 'income'),
@@ -116,7 +119,7 @@ export const isCategoryId = (v: unknown): v is CategoryId => typeof v === 'strin
 export const DEBIT_CATEGORIES = CATEGORIES.filter((x) => !x.isIncome);
 /** Categories you can pick for money coming in. */
 export const CREDIT_CATEGORIES = CATEGORIES.filter(
-  (x) => x.isIncome || x.id === 'card_bill' || x.id === 'self_transfer',
+  (x) => x.isIncome || x.id === 'card_bill' || x.id === 'self_transfer' || x.id === 'loans',
 );
 
 /** Where a category came from: our guess, a rule you made, or a one-off change. */
@@ -152,7 +155,11 @@ export type Txn = {
 };
 
 /** What a payment to a person is for. Picking one moves every payment to them into its category. */
-export type PurposeId = 'rent' | 'cook' | 'maid' | 'driver' | 'milk' | 'family' | 'friend' | 'own' | 'other';
+export type PurposeId =
+  // Money out
+  | 'rent' | 'cook' | 'maid' | 'driver' | 'milk' | 'family' | 'lend' | 'loan_repay' | 'interest_paid' | 'friend' | 'own' | 'other'
+  // Money in
+  | 'salary_in' | 'lend_back' | 'borrow' | 'interest_in' | 'family_in' | 'friend_back' | 'own_in' | 'other_in';
 
 /**
  * - transfer: the same money moved between your own accounts (or paid your own card bill).

@@ -17,7 +17,7 @@ import { deviceLocale } from './deviceLocale';
 import { keyOf } from './parser';
 import { pairKey, resolveFlows, type FlowPrefs } from './flows';
 import { processInbox } from './pipeline';
-import { isPurposeId, purpose } from './purposes';
+import { isPurposeId, purpose, purposeKey } from './purposes';
 import { checkSmsPermission, devGlobals, readInbox, requestSmsPermission, type SmsPermission } from './sms';
 import {
   CREDIT_CATEGORIES,
@@ -167,13 +167,14 @@ function applyPrefs(auto: Txn[], prefs: Prefs): Txn[] {
   const excluded = new Set(prefs.excluded);
   const fromSms = auto.map((t): Txn => {
     const override = prefs.overrides[t.id];
-    const rule = prefs.rules[t.merchantKey];
-    const tag = prefs.purposes?.[t.merchantKey];
+    // Money in can have its own rule (from tagging who pays you), else the shop's rule.
+    const rule = (t.type === 'credit' ? prefs.rules[purposeKey(t)] : undefined) ?? prefs.rules[t.merchantKey];
+    const tag = prefs.purposes?.[purposeKey(t)];
     let next = t;
     if (override && allowedFor(t, override)) next = { ...t, category: override, categorySource: 'manual' };
     else if (rule && allowedFor(t, rule)) next = { ...t, category: rule, categorySource: 'rule' };
     // The tag only shows while the payment is still in the category it gave.
-    if (tag && isPurposeId(tag) && t.type === 'debit' && next.category === purpose(tag).category) next = { ...next, purpose: tag };
+    if (tag && isPurposeId(tag) && purpose(tag).side === t.type && next.category === purpose(tag).category) next = { ...next, purpose: tag };
     return excluded.has(t.id) ? { ...next, excluded: true } : next;
   });
   const manual = prefs.manual.map((t) => (excluded.has(t.id) ? { ...t, excluded: true } : t));
@@ -392,8 +393,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const setPurpose = useCallback(
     (txn: Txn, next: PurposeId | null) => {
-      const key = txn.merchantKey;
-      if (!key) return;
+      if (!txn.merchantKey) return;
+      const key = purposeKey(txn);
       update((x) => {
         const purposes = { ...(x.purposes ?? {}) };
         const rules = { ...x.rules };

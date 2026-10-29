@@ -35,8 +35,15 @@ a purchase plus income. `src/lib/flows.ts` links related payments so every total
 ## What you pay people for
 
 Money sent to a person lands in "Sent to people", which says nothing about what it was for.
-You can tag a person once (Room rent, Cook, Maid & cleaning, Driver, Milk & daily needs,
-Family, Friend or split, My own account, Something else). The tag:
+You can tag a person once. Money out: Room rent, Cook, Maid & cleaning, Driver, Milk & daily
+needs, Family, Lent money, Loan repayment, Interest paid, Friend or split, My own account,
+Something else. Money in: Salary or work, Lent money back, Borrowed (loan), Interest received,
+From family, Friend paid back, My own account, Something else.
+
+Loans are in "Loans & lending", which is neither spending nor income: lent money and borrowed
+money come back. Interest paid counts as spending (EMI & loans); interest received is income.
+Money in has its own tag and rule per person (key `in:<merchantKey>`), so tagging what someone
+pays you never changes what you pay them. The tag:
 
 - saves `purposes[merchantKey]` and a matching category rule, so every past and future
   payment to that person moves (Cook → "Cook & house help", Room rent → "Rent & home"...);
