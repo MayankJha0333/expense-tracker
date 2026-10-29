@@ -250,7 +250,7 @@ export function Bars({
             style={{ flex: 1, alignItems: 'center', gap: 6 }}
             accessibilityLabel={`${d.label}: ${money(d.value)}`}
           >
-            <Txt variant="tiny" color={active ? p.ink : p.muted} numberOfLines={1}>
+            <Txt variant="tiny" color={active ? p.ink : p.muted} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
               {d.value > 0 && (values === 'all' || active) ? moneyCompact(d.value) : ''}
             </Txt>
             <GrowBar
