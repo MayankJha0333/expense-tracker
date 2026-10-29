@@ -498,21 +498,6 @@ export function NoticeRow({
   );
 }
 
-/** The round "add" button floating above the tab bar. */
-export function Fab({ onPress, label }: { onPress: () => void; label: string }) {
-  const p = usePalette();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [styles.fab, { backgroundColor: p.accent, shadowColor: p.ink, opacity: pressed ? 0.85 : 1 }]}
-    >
-      <Icon name="plus" size={28} color={p.onAccent} />
-    </Pressable>
-  );
-}
-
 export const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space.md, marginBottom: space.md },
   link: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 32, flexShrink: 0 },

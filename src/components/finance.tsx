@@ -4,14 +4,14 @@ import Animated from 'react-native-reanimated';
 
 import { needsReview, payLabel, type CardDue } from '../lib/accounts';
 import { kindLabel } from '../lib/purposes';
-import { addMonths, dateKey as toDateKey, dayOfMonth, daysInMonth, getMonthStart, isAfter, monthKey, monthName, monthShort, monthStartDate, sameMonth, shortDay, thisMonth, timeLabel, type Month } from '../lib/analytics';
+import { addMonths, getMonthStart, isAfter, monthKey, monthName, monthShort, shortDay, thisMonth, timeLabel, type Month } from '../lib/analytics';
 import { currencyOf } from '../lib/currency';
 import { money, moneyCompact, percent } from '../lib/money';
 import { cat, countsAsIncome, countsAsSaving, countsAsSpend, isForeign, shownAmount, type CategoryId, type Txn } from '../lib/types';
-import { alpha, radius, space, usePalette, type Palette } from '../theme';
+import { alpha, space, usePalette, type Palette } from '../theme';
 import { GrowBar } from './charts';
 import { enterFade, PressScale } from './motion';
-import { Badge, Icon, MixBar, PayBadge, ShareBar, Txt } from './ui';
+import { Badge, Icon, PayBadge, ShareBar, Txt } from './ui';
 
 const shortDate = (ts: number) => shortDay(ts);
 
@@ -167,113 +167,6 @@ export function MonthSwitcher({ month, onChange, light, compact }: { month: Mont
   );
 }
 
-/** One bar split into category colours, widest first. */
-export function StackedBar({ slices, height = 12 }: { slices: { category: CategoryId; share: number }[]; height?: number }) {
-  const shown = slices.filter((s) => s.share > 0.004);
-  return (
-    <MixBar
-      height={height}
-      parts={shown.map((s) => ({ share: s.share, color: cat(s.category).color }))}
-      label={shown.map((s) => `${cat(s.category).label} ${percent(s.share)}`).join(', ')}
-    />
-  );
-}
-
-/**
- * The month as a calendar. Each day is shaded by how much you spent:
- * darker saffron = bigger day. Tap a day to see its payments.
- */
-export function HeatCalendar({ month, byDay }: { month: Month; byDay: Record<number, number> }) {
-  const p = usePalette();
-  const total = daysInMonth(month);
-  const start = monthStartDate(month);
-  const firstWeekday = (start.getDay() + 6) % 7; // Monday = 0
-  const max = Math.max(0, ...Object.values(byDay));
-  const isCurrent = sameMonth(month, thisMonth());
-  const todayIndex = isCurrent ? dayOfMonth(new Date().getTime()) : 0;
-
-  // Cells hold the day's place in the month (1 = first day), which is what byDay is keyed by.
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let d = 1; d <= total; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-  const weeks: (number | null)[][] = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
-  const dateAt = (index: number) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index - 1);
-
-  const level = (amt: number) => {
-    if (amt <= 0 || max <= 0) return 0;
-    // Square root keeps one huge day from washing out all the others.
-    return 0.18 + 0.82 * Math.sqrt(amt / max);
-  };
-
-  return (
-    <View style={{ gap: 6 }}>
-      <View style={styles.weekRow}>
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-          <Txt key={i} variant="tiny" color={p.muted} style={styles.weekLabel}>
-            {d}
-          </Txt>
-        ))}
-      </View>
-      {weeks.map((week, wi) => (
-        <View key={wi} style={styles.weekRow}>
-          {week.map((day, di) => {
-            if (day === null) return <View key={di} style={styles.cell} />;
-            const amt = byDay[day] ?? 0;
-            const lv = level(amt);
-            const date = dateAt(day);
-            const future = isCurrent && day > todayIndex;
-            const isToday = isCurrent && day === todayIndex;
-            const dateKey = toDateKey(date.getTime());
-            return (
-              <Pressable
-                key={di}
-                disabled={future}
-                onPress={() => router.push(`/day/${dateKey}`)}
-                accessibilityLabel={`${shortDay(date.getTime(), true)}, ${amt > 0 ? money(amt) + ' spent' : 'no spending'}`}
-                style={[
-                  styles.cell,
-                  styles.cellBox,
-                  {
-                    backgroundColor: lv > 0 ? alpha(p.accent, lv) : p.track,
-                    opacity: future ? 0.35 : 1,
-                    borderWidth: isToday ? 2 : 0,
-                    borderColor: p.ink,
-                  },
-                ]}
-              >
-                <Txt variant="tiny" color={lv > 0.62 ? p.onAccent : lv > 0 ? p.ink : p.muted}>
-                  {date.getDate()}
-                </Txt>
-              </Pressable>
-            );
-          })}
-        </View>
-      ))}
-      <View style={styles.legend}>
-        <Txt variant="tiny" color={p.muted}>
-          Less
-        </Txt>
-        {[0, 0.3, 0.55, 0.8, 1].map((lv) => (
-          <View
-            key={lv}
-            style={{
-              width: 12,
-              height: 12,
-              borderRadius: 3,
-              backgroundColor: lv === 0 ? p.track : alpha(p.accent, lv),
-            }}
-          />
-        ))}
-        <Txt variant="tiny" color={p.muted}>
-          More
-        </Txt>
-      </View>
-    </View>
-  );
-}
-
 /** Category with amount, share bar and optional change vs last month. */
 export function CategoryRow({
   category,
@@ -375,11 +268,6 @@ const styles = StyleSheet.create({
   pill: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999, paddingHorizontal: 2, height: 40 },
   pillBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   switcher: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
-  weekRow: { flexDirection: 'row', gap: 6 },
-  weekLabel: { flex: 1, textAlign: 'center' },
-  cell: { flex: 1, aspectRatio: 1.3 },
-  cellBox: { borderRadius: radius.sm - 2, alignItems: 'center', justifyContent: 'center' },
-  legend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 4 },
   catRow: { flexDirection: 'row', gap: space.md, alignItems: 'center', paddingVertical: 10 },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.sm },
 });

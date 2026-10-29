@@ -16,7 +16,7 @@ a purchase plus income. `src/lib/flows.ts` links related payments so every total
 | **You, no pair found** | Money out to your own name or your own bank (or in from your own name). | Self transfer: not spending or income. |
 
 **Who you are** is read from the data: your name from salary/NEFT alerts
-("…-MAYANKJHA-…"), your banks from the banks that send you alerts.
+("…-RAVISHARMA-…"), your banks from the banks that send you alerts.
 
 ## Your corrections always win
 
@@ -68,11 +68,11 @@ each bank account's money in, money out and change (`/flow`, linked from Home).
 ## Credit cards
 
 - Bills come from statement SMS and app reminders. Since mid-2026 HDFC sends "Statement
-  Generated … XX8429" with no amount; the amount comes in a reminder ("bill of Rs.49243 is due
+  Generated … XX6655" with no amount; the amount comes in a reminder ("bill of Rs.49243 is due
   on 2026-10-21") that names no card. `mergeCardNotices` joins them: the reminder takes the card
   of the latest statement from that bank, the bill starts on the statement day, and repeats are
   kept once (later ones counted as reminders).
-- A credit card used over UPI ("On HDFC Bank Card 8429 … by UPI") belongs to the card.
+- A credit card used over UPI ("On HDFC Bank Card 6655 … by UPI") belongs to the card.
 - A card bill paid through an app can differ by a few rupees between the bank and the card
   (₹49,238 vs ₹49,243); those two are still linked.
 - `/cards` shows what you owe now (unpaid bill + spent since the statement), due dates with days

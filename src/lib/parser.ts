@@ -244,10 +244,6 @@ export function findMoney(text: string): FoundMoney | null {
   return null;
 }
 
-export function findAmount(text: string): number | null {
-  return findMoney(text)?.amount ?? null;
-}
-
 export function findAccount(text: string): string | null {
   const m = MASKED_ACCT.exec(text) ?? NAMED_ACCT.exec(text);
   return m ? m[1].slice(-4) : null;

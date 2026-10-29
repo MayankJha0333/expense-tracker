@@ -243,22 +243,6 @@ export function summarize(all: Txn[], month: Month): MonthSummary {
   };
 }
 
-/** Spending for [count] months ending at [end], oldest first. */
-export function trend(all: Txn[], end: Month, count = 6): { month: Month; spent: number }[] {
-  const totals = new Map<string, number>();
-  for (const t of all) {
-    if (!countsAsSpend(t)) continue;
-    const k = monthKey(monthOf(t.timestamp));
-    totals.set(k, (totals.get(k) ?? 0) + t.amount);
-  }
-  const out: { month: Month; spent: number }[] = [];
-  for (let back = count - 1; back >= 0; back--) {
-    const m = addMonths(end, -back);
-    out.push({ month: m, spent: totals.get(monthKey(m)) ?? 0 });
-  }
-  return out;
-}
-
 export type FlowMonth = { month: Month; income: number; spent: number; saved: number; invested: number };
 
 /** Money in, money out and what was left, for [count] months ending at [end], oldest first. */
@@ -388,9 +372,4 @@ export function byWeekday(txns: Txn[]): { label: string; amount: number }[] {
     sums[(jsDay + 6) % 7] += t.amount;
   }
   return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => ({ label, amount: sums[i] }));
-}
-
-export function percentChange(now: number, before: number): number | null {
-  if (before <= 0) return null;
-  return ((now - before) / before) * 100;
 }

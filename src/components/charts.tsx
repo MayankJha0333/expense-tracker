@@ -1,13 +1,11 @@
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedProps, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 
-import { monthShort, type FlowMonth } from '../lib/analytics';
-import { money, moneyCompact } from '../lib/money';
-import { alpha, space, usePalette } from '../theme';
+import type { FlowMonth } from '../lib/analytics';
+import { usePalette } from '../theme';
 import { useFill } from './motion';
-import { Txt } from './ui';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -117,54 +115,6 @@ export function Ring({
   );
 }
 
-/**
- * Money in (mint) next to money out (saffron) for each month.
- * Tap a month to select it. The selected month is fully coloured.
- */
-export function CashflowBars({
-  data,
-  selected,
-  onSelect,
-  height = 132,
-}: {
-  data: FlowMonth[];
-  selected: number;
-  onSelect?: (i: number) => void;
-  height?: number;
-}) {
-  const p = usePalette();
-  const max = Math.max(1, ...data.map((d) => Math.max(d.income, d.spent)));
-  const bar = (v: number) => (v > 0 ? Math.max(4, (v / max) * height) : 2);
-  return (
-    <View>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.sm }}>
-        {data.map((d, i) => {
-          const on = i === selected;
-          return (
-            <Pressable
-              key={i}
-              onPress={() => onSelect?.(i)}
-              disabled={!onSelect}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              accessibilityLabel={`${monthShort(d.month)}: ${money(d.income)} in, ${money(d.spent)} out`}
-              style={[styles.flowCol, on && { backgroundColor: alpha(p.ink, 0.05) }]}
-            >
-              <View style={[styles.pair, { height }]}>
-                <GrowBar index={i * 2} height={bar(d.income)} style={[styles.flowBar, { backgroundColor: on ? p.income : alpha(p.income, 0.35) }]} />
-                <GrowBar index={i * 2 + 1} height={bar(d.spent)} style={[styles.flowBar, { backgroundColor: on ? p.accent : alpha(p.accent, 0.35) }]} />
-              </View>
-              <Txt variant="tiny" color={on ? p.ink : p.muted}>
-                {monthShort(d.month)}
-              </Txt>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 /** Line of how much was left each month, with zero marked. */
 export function SavingsLine({ data, height = 96 }: { data: FlowMonth[]; height?: number }) {
   const p = usePalette();
@@ -216,29 +166,3 @@ export function SavingsLine({ data, height = 96 }: { data: FlowMonth[]; height?:
     </View>
   );
 }
-
-/** Legend dot + label + value, used under charts. */
-export function LegendItem({ color, label, value }: { color: string; label: string; value?: number }) {
-  const p = usePalette();
-  return (
-    <View style={styles.legend}>
-      <View style={[styles.dot, { backgroundColor: color }]} />
-      <Txt variant="small" color={p.inkSoft}>
-        {label}
-      </Txt>
-      {value !== undefined ? (
-        <Txt variant="smallStrong" tabular>
-          {moneyCompact(value)}
-        </Txt>
-      ) : null}
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  flowCol: { flex: 1, alignItems: 'center', gap: 6, paddingTop: 6, paddingBottom: 4, borderRadius: 10 },
-  pair: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
-  flowBar: { width: 9, borderRadius: 5 },
-  legend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 10, height: 10, borderRadius: 3 },
-});
