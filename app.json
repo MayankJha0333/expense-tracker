@@ -2,14 +2,14 @@
   "expo": {
     "name": "Kharcha",
     "slug": "kharcha",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0A0A0B",
     "android": {
       "package": "com.mayankjha.kharcha",
-      "versionCode": 1002,
+      "versionCode": 1003,
       "adaptiveIcon": {
         "backgroundColor": "#2E3FE6",
         "foregroundImage": "./assets/android-icon-foreground.png",
