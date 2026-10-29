@@ -78,5 +78,44 @@ eq('moved to own accounts', f.movedOut, 55000);
 const acct = f.accounts.find((a) => a.key.includes('4321'));
 eq('HDFC balance change = in - out', acct?.change, 105500 - 49238 - 250 - 55000);
 
+// ---- spending that isn't really yours, or isn't really twice ----
+const more = processInbox([
+  // Google Play on the card in full, later on the card with a half-hidden UPI ID.
+  sms('AD-HDFCBK-S', 'Txn Rs.12493.75 On HDFC Bank Card 6655 At playstore1.bd@axisbank by UPI 508597442406 On 28-08 Not You? Call 18002586161/SMS BLOCK CC 6655 to 7308080808', at(7, 28)),
+  sms('VM-HDFCBK-S', 'Txn Rs.12493.75 On HDFC Bank Card 6655 At *1.bd@axisbank by UPI 376433013016 On 28-10 Not You? Call 18002586161/SMS BLOCK CC 6655 to 7308080808', at(9, 28)),
+  // The company pays the August one back.
+  sms('JX-HDFCBK-S', 'Update! INR 12,493.75 deposited in HDFC Bank A/c XX4321 on 23-SEP-26 for NEFT Cr-ICIC0SF0002-ACME SOFTWARE PRIVATE LIMITED-RAVISHARMA-INXXXX1373.Avl bal INR 12,568.15', at(8, 23)),
+  // The same Furlenco bill paid by autopay and again by hand from slice.
+  sms('JM-HDFCBK-S', 'UPI Mandate: Sent Rs.927.05 from HDFC Bank A/c 4321 To Furlenco 12/10/26 Ref 628502581047 Not You? Call 18002586161/SMS BLOCK UPI to 7308080808', at(9, 12, 2)),
+  sms('VA-SLCBNK-S', 'Rs. 927.05 sent from a/c xx9087 on 12-Oct-26 to WWW FURLENCO COM (UPI Ref: 628531013382). Not you? Call 08048329999 - slice', at(9, 12, 11)),
+]);
+const moreTx = resolveFlows(more.txns);
+const play = moreTx.filter((t) => (t.grossAmount ?? t.amount) === 12493.75 && t.type === 'debit').sort((a, b) => a.timestamp - b.timestamp);
+eq('half-hidden UPI ID named after the shop', play.map((t) => t.merchant), ['Google Play', 'Google Play']);
+eq('company paid back the August charge', [play[0]?.netted, play[0]?.links?.[0]?.reimbursed], [true, true]);
+eq('October charge is still spending', play[1]?.netted, undefined);
+const neft = moreTx.find((t) => t.type === 'credit' && t.amount === 12493.75);
+eq('the pay-back is not income', neft?.netted, true);
+const furl = moreTx.filter((t) => t.amount === 927.05);
+eq('same bill paid twice is flagged on both', furl.map((t) => !!t.maybeDuplicateOf), [true, true]);
+// Once you turn one off, or say both are real, it stops asking.
+eq('turned off one: no longer flagged', resolveFlows(more.txns.map((t) => (t.amount === 927.05 && t.account === '9087' ? { ...t, excluded: true } : t))).filter((t) => t.amount === 927.05).map((t) => !!t.maybeDuplicateOf), [false, false]);
+eq('both confirmed: no longer flagged', resolveFlows(more.txns.map((t) => (t.amount === 927.05 ? { ...t, categorySource: 'manual' as const } : t))).filter((t) => t.amount === 927.05).map((t) => !!t.maybeDuplicateOf), [false, false]);
+
+const edge = processInbox([
+  // Two unknown shops for the same amount on the same day are not "paid twice".
+  sms('VM-HDFCBK-S', 'Txn Rs.250.00 On HDFC Bank Card 6655 At NA by UPI 131864554440 On 26-10 Not You? Call 18002586161/SMS BLOCK CC 6655 to 7308080808', at(9, 26, 9)),
+  sms('VA-SLCBNK-S', 'Rs. 250 sent from a/c xx9087 on 26-Oct-26 to UPI (UPI Ref: 629928156118). Not you? Call 08048329999 - slice', at(9, 26, 12)),
+  // A person's full UPI ID never names a half-hidden shop ID.
+  sms('VM-HDFCBK-S', 'Sent Rs.120.00 From HDFC Bank A/C *4321 To RAMESH KUMAR On 05/10/26 Ref 1 Not You? Call 18002586161 - paid to rameshonline@ybl', at(9, 5)),
+  sms('JD-HDFCBK-S', 'Txn Rs.231.00 On HDFC Bank Card 6655 At *line@ybl by UPI 665606468156 On 17-10 Not You? Call 18002586161/SMS BLOCK CC 6655 to 7308080808', at(9, 17)),
+  // Too little left to tell who it is.
+  sms('JD-HDFCBK-S', 'Txn Rs.99.00 On HDFC Bank Card 6655 At *ne@ybl by UPI 665606468157 On 17-10 Not You? Call 18002586161/SMS BLOCK CC 6655 to 7308080808', at(9, 17, 12)),
+]);
+const edgeTx = resolveFlows(edge.txns);
+eq('two unknown shops are not paid twice', edgeTx.filter((t) => t.amount === 250).map((t) => !!t.maybeDuplicateOf), [false, false]);
+eq('masked ID not named after a person', edgeTx.find((t) => t.amount === 231)?.merchant === 'Ramesh Kumar', false);
+eq('very short masked ID left alone', edgeTx.find((t) => t.amount === 99)?.merchant, 'UPI payment');
+
 console.log(`${passed} / ${passed + failed} passed`);
 if (failed) process.exit(1);

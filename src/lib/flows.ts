@@ -27,6 +27,8 @@ const EARLY_SLACK = 30 * 60_000;
 const REFUND_WINDOW = 120 * DAY;
 /** A failed UPI payment is reversed within days, to the same account. */
 const REVERSAL_WINDOW = 10 * DAY;
+/** Work expenses are usually paid back with the next salary or two. */
+const REIMBURSE_WINDOW = 60 * DAY;
 const CENT = 0.005;
 
 /** What you told the app. Stored with your other corrections. */
@@ -151,12 +153,13 @@ const userPicked = (t: Txn) => t.categorySource === 'manual' && t.category !== '
 
 type Work = Map<string, Txn>;
 
-function addLink(work: Work, outId: string, inId: string, kind: LinkKind, source: TxnLink['source'], amount: number) {
+function addLink(work: Work, outId: string, inId: string, kind: LinkKind, source: TxnLink['source'], amount: number, reimbursed = false) {
   const out = work.get(outId);
   const inn = work.get(inId);
   if (!out || !inn) return;
-  out.links = [...(out.links ?? []), { kind, otherId: inId, source, amount }];
-  inn.links = [...(inn.links ?? []), { kind, otherId: outId, source, amount }];
+  const extra = reimbursed ? { reimbursed: true } : {};
+  out.links = [...(out.links ?? []), { kind, otherId: inId, source, amount, ...extra }];
+  inn.links = [...(inn.links ?? []), { kind, otherId: outId, source, amount, ...extra }];
   if (kind === 'transfer') {
     // Your own money, so neither spending nor income. A card bill already counts as neither.
     for (const t of [out, inn]) if (t.category !== 'card_bill' && !(source === 'auto' && userPicked(t))) t.category = 'self_transfer';
@@ -178,7 +181,7 @@ const refundable = (t: Txn) => t.amount;
  * `txns` must already have your category corrections applied.
  */
 export function resolveFlows(txns: Txn[], prefs: FlowPrefs = EMPTY_FLOW_PREFS): Txn[] {
-  const work: Work = new Map(txns.map((t) => [t.id, { ...t, links: undefined, grossAmount: undefined, netted: undefined }]));
+  const work: Work = new Map(txns.map((t) => [t.id, { ...t, links: undefined, grossAmount: undefined, netted: undefined, maybeDuplicateOf: undefined }]));
   const me = identity(txns, prefs);
   const blocked = new Set(prefs.unlinked);
 
@@ -249,11 +252,49 @@ export function resolveFlows(txns: Txn[], prefs: FlowPrefs = EMPTY_FLOW_PREFS): 
     if (best) addLink(work, best.id, inn.id, 'refund', 'auto', inn.amount);
   }
 
+  // 3b. Paid back for something you bought: a company reimbursing a work expense ("Google Play ₹12,493.75" on
+  // 28 Aug, "NEFT ₹12,493.75" on 23 Sep). The exact same rupees and paise, not a round number, 1 to 60 days later.
+  for (const inn of ins) {
+    // Money from your own name is you moving money, never a pay-back.
+    if (isLinked(inn) || userPicked(inn) || inn.category !== 'received' || isOwnName(inn.merchant, me)) continue;
+    if (inn.amount < 500 || Math.abs(inn.amount - Math.round(inn.amount)) < CENT) continue;
+    let best: Txn | null = null;
+    for (const out of outs) {
+      const gap = inn.timestamp - out.timestamp;
+      if (gap <= DAY) break;
+      if (gap > REIMBURSE_WINDOW || isLinked(out) || out.netted || !cat(out.category).countsAsSpend) continue;
+      if (!sameCents(out.amount, inn.amount) || blocked.has(pairKey(out.id, inn.id))) continue;
+      best = out; // oldest first, so the last one kept is the closest before the money came back
+    }
+    if (best) addLink(work, best.id, inn.id, 'refund', 'auto', inn.amount, true);
+  }
+
   // 4. No pair found, but clearly you: paying yourself or topping up your own account.
   for (const t of list) {
     if (isLinked(t) || t.categorySource !== 'auto' || isCardTxn(t)) continue;
     const own = isOwnName(t.merchant, me) || (t.type === 'debit' && isOwnBank(t.merchant, me));
     if (own && (t.type === 'debit' ? OUT_CAN_MOVE : IN_CAN_MOVE).has(t.category)) t.category = 'self_transfer';
+  }
+
+  // 5. The same bill paid twice the same day from two places (an autopay and by hand). Ask, don't guess:
+  // one of them may not have gone through.
+  // Settled: you turned one off, or said this one is right ("Both are real payments").
+  const settled = (t: Txn) => t.excluded || t.categorySource === 'manual';
+  // "UPI payment" twice is two unknown shops, not one shop twice.
+  const named = (t: Txn) => !MADE_UP_NAME.test(t.merchant) && !/qr payment$/i.test(t.merchant);
+  for (let i = 0; i < outs.length; i++) {
+    const a = outs[i];
+    if (isLinked(a) || settled(a) || !named(a) || !cat(a.category).countsAsSpend || a.amount < 100) continue;
+    for (let j = i + 1; j < outs.length; j++) {
+      const b = outs[j];
+      if (b.timestamp - a.timestamp > DAY) break;
+      if (isLinked(b) || settled(b) || !named(b) || !sameCents(a.amount, b.amount) || !differentPlace(a, b)) continue;
+      const ka = a.merchantKey.slice(0, 6);
+      const kb = b.merchantKey.slice(0, 6);
+      if (ka.length < 4 || kb.length < 4 || !(a.merchantKey.includes(kb) || b.merchantKey.includes(ka))) continue;
+      a.maybeDuplicateOf = b.id;
+      b.maybeDuplicateOf = a.id;
+    }
   }
 
   return txns.map((t) => work.get(t.id) ?? t);
@@ -279,8 +320,15 @@ export function linkCandidates(txn: Txn, all: Txn[]): LinkCandidate[] {
       refund.timestamp - purchase.timestamp <= REFUND_WINDOW &&
       (purchase.merchantKey === refund.merchantKey || REFUND_WORDS.test(refund.rawSms ?? '')) &&
       refund.amount <= (purchase.grossAmount ?? purchase.amount) + CENT;
+    // Paid back later for exactly what you spent (a company reimbursing you): offered for up to 90 days.
+    const paidBack =
+      !refundLike &&
+      refund.timestamp > purchase.timestamp &&
+      refund.timestamp - purchase.timestamp <= 90 * DAY &&
+      sameCents(refund.amount, purchase.grossAmount ?? purchase.amount);
     if (refundLike) out.push({ txn: o, kind: 'refund', why: purchase.merchantKey === refund.merchantKey ? 'Same shop' : 'Refund' });
     else if (transferLike) out.push({ txn: o, kind: 'transfer', why: 'Same amount' });
+    else if (paidBack) out.push({ txn: o, kind: 'refund', why: 'Same amount, paid back' });
   }
   return out
     .sort((a, b) => Math.abs(a.txn.timestamp - txn.timestamp) - Math.abs(b.txn.timestamp - txn.timestamp))

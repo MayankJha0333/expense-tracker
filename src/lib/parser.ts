@@ -153,7 +153,9 @@ const VPA_BRANDS: [RegExp, string][] = [
   [/bookmyshow/, 'BookMyShow'],
   [/dominos/, "Domino's"],
   [/makemytrip/, 'MakeMyTrip'],
-  [/googleplay/, 'Google Play'],
+  [/googleplay|^playstore/, 'Google Play'],
+  [/googleworkspace/, 'Google Workspace'],
+  [/googlecloud|^gcloud/, 'Google Cloud'],
 ];
 const MERCHANT_PREFIX = /^(upi[-/ ]|pos[ /]|ecom[ /]|vps[ /]|pg[ /]|iap[ /]|mps[ /]|[a-z]{2,4}\*)/i;
 const MERCHANT_SUFFIX = /\s+(pvt|pte|pty|private|ltd|limited|llp|llc|plc|gmbh|inc|india|technologies|retail|co|payu|hyperpg|rzp|razorpay|cashfree|juspay)\.?$/i;

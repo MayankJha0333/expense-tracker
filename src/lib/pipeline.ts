@@ -95,6 +95,37 @@ export function mergeCardNotices(notices: CardNotice[]): CardBill[] {
   return [...out.values()];
 }
 
+// HDFC hides part of the UPI ID in card-on-UPI alerts: "At *1.bd@axisbank". The same shop shows in full
+// in other alerts ("At playstore1.bd@axisbank"), so the visible end is often enough to know who it was.
+const FULL_VPA = /\b(?:at|to)\s+([a-z0-9][\w.-]{2,}@[a-z]{2,})\b/i;
+const MASKED_VPA = /\b(?:at|to)\s+\*([\w.-]{2,}@[a-z]{2,})\b/i;
+const NO_NAME = /^(?:upi payment|card payment|payment|.*qr payment)$/i;
+
+/** Names payments to a half-hidden UPI ID after the one shop it can be. Left alone when it could be more than one. */
+function nameMaskedPayments(kept: Txn[]) {
+  const known: { vpa: string; t: Txn }[] = [];
+  for (const t of kept) {
+    const m = t.rawSms ? FULL_VPA.exec(t.rawSms) : null;
+    // Shops only: a person's UPI ID can share an ending with a shop's ("*line@ybl").
+    if (m && !NO_NAME.test(t.merchant) && t.category !== 'people') known.push({ vpa: m[1].toLowerCase(), t });
+  }
+  for (const t of kept) {
+    const m = t.rawSms ? MASKED_VPA.exec(t.rawSms) : null;
+    if (!m) continue;
+    const tail = m[1].toLowerCase();
+    // "*ne@ybl" is too short to tell shops apart; "*1.bd@axisbank" or "*mato@hdfcbank" is enough.
+    if (tail.split('@')[0].replace(/[^a-z0-9]/g, '').length < 3) continue;
+    const matches = new Map<string, Txn>();
+    for (const k of known) if (k.vpa.endsWith(tail)) matches.set(k.t.merchantKey, k.t);
+    if (matches.size !== 1) continue;
+    const from = [...matches.values()][0];
+    t.merchant = from.merchant;
+    t.merchantKey = from.merchantKey;
+    // Only fill in a guess we didn't have; never change a category that came from the message itself.
+    if (t.category === 'other' || t.category === 'people') t.category = from.category;
+  }
+}
+
 /** Raw inbox → clean list of transactions, credit card bills, and counts of what was skipped. */
 export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<SkipReason, number>> = {}) {
   const skipped: Partial<Record<SkipReason, number>> = { ...extraSkipped };
@@ -171,6 +202,7 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
       categorySource: 'auto',
     });
   }
+  nameMaskedPayments(kept);
   kept.sort((a, b) => b.timestamp - a.timestamp);
   const personal = extraSkipped.personal ?? 0;
   const stats: ScanStats = { scanned: messages.length + personal, kept: kept.length, skipped };

@@ -391,6 +391,8 @@ export function cardPaymentsToCheck(txns: Txn[], dues: CardDue[], checked: Reado
 export function needsReview(t: Txn): boolean {
   // Linked to another payment (a transfer or refund): Kharcha already knows what it is.
   if (t.excluded || t.categorySource !== 'auto' || (t.links?.length ?? 0) > 0) return false;
+  // Maybe paid twice: worth a look whatever the category.
+  if (t.maybeDuplicateOf) return true;
   if (t.type === 'debit') return t.category === 'other';
   return t.category === 'received';
 }

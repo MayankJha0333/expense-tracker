@@ -152,6 +152,8 @@ export type Txn = {
   netted?: boolean;
   /** What you told us this person is paid for ("Cook", "Room rent"). See lib/purposes.ts. */
   purpose?: PurposeId;
+  /** Another payment of the same amount to the same place, the same day, from another account: maybe paid twice. */
+  maybeDuplicateOf?: string;
 };
 
 /** What a payment to a person is for. Picking one moves every payment to them into its category. */
@@ -175,6 +177,8 @@ export type TxnLink = {
   source: 'auto' | 'user';
   /** How much of this payment the link covers (a refund can be part of a purchase). */
   amount: number;
+  /** A refund that is really someone paying you back for it (a company reimbursing a work expense). */
+  reimbursed?: boolean;
 };
 
 /** What you see for a payment: the full amount in the message, even after a refund is taken off. */

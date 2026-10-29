@@ -72,7 +72,8 @@ export default function TxnDetail() {
     ],
   ];
   if (txn.bank || txn.account) details.push([txn.mode === 'card' ? 'Card' : 'Account', [txn.bank, txn.account ? `ending ${txn.account}` : null].filter(Boolean).join(', ')]);
-  const review = needsReview(txn);
+  // "Paid twice?" has its own notice below.
+  const review = needsReview(txn) && !txn.maybeDuplicateOf;
   if (txn.note) details.push(['Note', txn.note]);
   const foreign = isForeign(txn);
   const code = currencyOf(txn);
@@ -121,6 +122,31 @@ export default function TxnDetail() {
           }
           onPress={() => router.push('/cards')}
         />
+      ) : null}
+      {txn.maybeDuplicateOf && find(txn.maybeDuplicateOf) ? (
+        <View style={{ gap: space.sm }}>
+          <NoticeRow
+            tone="warn"
+            icon="content-duplicate"
+            title="Paid twice?"
+            body={`The same amount went to ${txn.merchant} from another account the same day. If one of them didn't really go through, turn off "${countLabel}" below on that one.`}
+          />
+          <TxnRow txn={find(txn.maybeDuplicateOf) as Txn} showDate />
+          {txn.categorySource === 'auto' && !txn.excluded ? (
+            <Button
+              label="Both are real payments"
+              icon="check"
+              kind="secondary"
+              compact
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                const other = txn.maybeDuplicateOf ? find(txn.maybeDuplicateOf) : undefined;
+                confirmCategory(txn);
+                if (other) confirmCategory(other);
+              }}
+            />
+          ) : null}
+        </View>
       ) : null}
       <Linked txn={txn} others={(txn.links ?? []).map((l) => find(l.otherId)).filter((o): o is Txn => !!o)} onUnlink={(o) => unlinkTxns(txn, o)} />
 
@@ -281,7 +307,17 @@ function Linked({ txn, others, onUnlink }: { txn: Txn; others: Txn[]; onUnlink: 
     );
   }
   const transfer = link.kind === 'transfer';
-  const title = transfer ? (txn.category === 'card_bill' ? 'Card bill, both sides' : 'Same money, your accounts') : credit ? 'Refund for' : 'Money back';
+  const title = transfer
+    ? txn.category === 'card_bill'
+      ? 'Card bill, both sides'
+      : 'Same money, your accounts'
+    : link.reimbursed
+      ? credit
+        ? 'Paid back for'
+        : 'Paid back to you'
+      : credit
+        ? 'Refund for'
+        : 'Money back';
   const body = transfer
     ? txn.category === 'card_bill'
       ? 'Paying your own card bill is not new spending: what you bought on the card already counted.'

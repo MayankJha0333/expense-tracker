@@ -106,6 +106,10 @@ export function flowLabel(txn: Txn): string | null {
     if (txn.category === 'card_bill') return credit ? 'Card bill paid' : 'Paid your card bill';
     return credit ? 'From your own account' : 'To your own account';
   }
+  if (links.some((l) => l.kind === 'refund' && l.reimbursed)) {
+    if (credit) return 'Paid back for a purchase';
+    return txn.netted ? 'Paid back to you in full' : `${cat(txn.category).label} · part paid back`;
+  }
   if (links.some((l) => l.kind === 'refund')) {
     if (credit) return 'Refund, taken off the purchase';
     return txn.netted ? 'Refunded in full' : `${cat(txn.category).label} · part refunded`;
