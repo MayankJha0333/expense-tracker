@@ -5,7 +5,7 @@ import {
   parseAmountText,
   type CurrencyCode,
 } from './currency';
-import type { CardBill, PayMode, SkipReason, TxnType } from './types';
+import type { CardBill, PayMode, ScheduledDebit, SkipReason, TxnType } from './types';
 
 /** One SMS as it comes from the phone's inbox. */
 export type RawSms = { id: string; sender: string; body: string; date: number };
@@ -541,4 +541,53 @@ export function parseCardNotice(sms: RawSms): CardNotice | null {
       statementDate: sms.date,
     },
   };
+}
+
+// ---------- scheduled payments and fund names ----------
+
+// SBI: "UPI AutoPay for Indian Clearing Corporation debit of Rs.5000.00 is scheduled on .07/10/26"
+const AUTOPAY_SCHEDULED = /\bauto\s*pay\s+for\s+(.+?)\s+debit\s+of\s+(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.\d+)?)\s+is\s+scheduled\s+on\s*\.?\s*(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/i;
+// HDFC: "E-Mandate! Rs.199.00 will be deducted on 21/10/26, 00:00:00 For NETFLIX mandate UMN …"
+const MANDATE_SCHEDULED = /(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.\d+)?)\s+will\s+be\s+(?:deducted|debited)\s+on\s+(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})[^]*?\bfor\s+(.+?)\s+mandate\b/i;
+
+/** A payment the bank will take soon (SIP autopay, subscription mandate), or null. */
+export function parseScheduledDebit(sms: RawSms): ScheduledDebit | null {
+  const sender = sms.sender.trim().toUpperCase();
+  if (PERSONAL_SENDER.test(sender.replace(/[\s-]/g, ''))) return null;
+  const text = normalize(sms.body);
+  let name: string;
+  let amountRaw: string;
+  let dmy: [string, string, string];
+  const a = AUTOPAY_SCHEDULED.exec(text);
+  const m = a ? null : MANDATE_SCHEDULED.exec(text);
+  if (a) [name, amountRaw, dmy] = [a[1], a[2], [a[3], a[4], a[5]]];
+  else if (m) [name, amountRaw, dmy] = [m[5], m[1], [m[2], m[3], m[4]]];
+  else return null;
+  const amount = Number(amountRaw.replace(/,/g, ''));
+  let year = Number(dmy[2]);
+  if (year < 100) year += 2000;
+  const date = new Date(year, Number(dmy[1]) - 1, Number(dmy[0]));
+  if (!Number.isFinite(amount) || amount <= 0 || date.getDate() !== Number(dmy[0])) return null;
+  return {
+    id: `sched-${sms.id}`,
+    name: cleanMerchant(name).name,
+    amount,
+    date: date.getTime(),
+    bank: bankFor(sender) ?? bankFromText(text),
+    notifiedAt: sms.date,
+  };
+}
+
+// Groww: "886179 is the OTP to edit your SIP in Nippon Nippon India Small.. on Groww."
+const SIP_FUND = /\bsip\s+(?:in|of|for)\s+([A-Za-z][A-Za-z0-9 &.\-]{3,60}?)\s+on\s+(groww|zerodha|coin|kuvera|indmoney|paytm money|et money)\b/i;
+
+/** "Nippon India Small" from a SIP message, or null. Only the name is kept, never the code in the message. */
+export function parseFundName(sms: RawSms): string | null {
+  const m = SIP_FUND.exec(normalize(sms.body));
+  if (!m) return null;
+  const words = m[1].replace(/\.+$/, '').trim().split(/\s+/);
+  // Groww repeats the fund house: "Aditya Aditya Birla Sun PSU".
+  if (words.length > 1 && words[0].toLowerCase() === words[1].toLowerCase()) words.shift();
+  const name = words.join(' ');
+  return name.length >= 4 ? name : null;
 }

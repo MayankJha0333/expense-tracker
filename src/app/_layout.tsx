@@ -63,6 +63,7 @@ function AppShell() {
           <Stack.Screen name="people" />
           <Stack.Screen name="flow" />
           <Stack.Screen name="cards" />
+          <Stack.Screen name="investments" />
           <Stack.Screen name="day/[date]" />
           <Stack.Screen name="account/[key]" />
           <Stack.Screen name="goals" />

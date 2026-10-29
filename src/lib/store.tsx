@@ -31,6 +31,7 @@ import {
   type PayMode,
   type PurposeId,
   type ScanStats,
+  type ScheduledDebit,
   type Txn,
   type TxnType,
 } from './types';
@@ -57,6 +58,8 @@ type Prefs = {
   paidBills: string[];
   /** Card bill payments you looked at and said are fine (Credit cards › Payments to check). */
   checkedCardPayments: string[];
+  /** Scheduled SIPs with no payment message that you said to ignore (Investments). */
+  ignoredSchedules: string[];
   /** Links between payments you made by hand (see lib/flows.ts). */
   links: FlowPrefs['links'];
   /** Links Kharcha found that you removed. */
@@ -77,6 +80,7 @@ const EMPTY_PREFS: Prefs = {
   budget: null,
   paidBills: [],
   checkedCardPayments: [],
+  ignoredSchedules: [],
   links: [],
   unlinked: [],
   ownNames: [],
@@ -133,10 +137,17 @@ type Store = {
   budget: number | null;
   /** Credit card statements read from SMS, newest first. */
   bills: CardBill[];
+  /** Payments the bank said it will take soon (SIP autopay, mandates). */
+  scheduled: ScheduledDebit[];
+  /** Mutual funds named in your SIP messages ("Nippon India Small"). */
+  funds: string[];
   paidBills: string[];
   checkedCardPayments: string[];
   /** "Yes, this card payment is right": stops asking about it. */
   checkCardPayment: (txnId: string) => void;
+  ignoredSchedules: string[];
+  /** "This scheduled SIP didn't happen": stops asking about it. */
+  ignoreSchedule: (id: string) => void;
   setMonth: (m: Month) => void;
   refresh: () => Promise<void>;
   requestAccess: () => Promise<SmsPermission>;
@@ -207,10 +218,10 @@ async function loadPrefs(): Promise<{ prefs: Prefs; ok: boolean }> {
 
 function demoState(kind: SampleKind) {
   const now = Date.now();
-  const { txns, stats, bills } = processInbox(demoInbox(now, kind));
+  const { txns, stats, bills, scheduled, funds } = processInbox(demoInbox(now, kind));
   const extras = demoExtras(now, kind);
   const prefs: Prefs = { ...EMPTY_PREFS, source: 'demo', manual: extras.manual, goals: extras.goals, budget: extras.budget };
-  return { txns, stats, bills, prefs };
+  return { txns, stats, bills, scheduled, funds, prefs };
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -219,6 +230,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [autoTxns, setAutoTxns] = useState<Txn[]>([]);
   const [stats, setStats] = useState<ScanStats>(EMPTY_STATS);
   const [bills, setBills] = useState<CardBill[]>([]);
+  const [scheduled, setScheduled] = useState<ScheduledDebit[]>([]);
+  const [funds, setFunds] = useState<string[]>([]);
   const [saved, setSaved] = useState<Prefs>(EMPTY_PREFS);
   // Sample data lives only in memory, so it can never mix with your own.
   const [demo, setDemo] = useState<Prefs | null>(null);
@@ -265,10 +278,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const inbox = await readInbox();
       // Let the spinner paint before the parsing work starts.
       await new Promise((r) => setTimeout(r, 0));
-      const { txns, stats: s, bills: b } = processInbox(inbox.messages, { personal: inbox.personalSkipped });
+      const { txns, stats: s, bills: b, scheduled: sc, funds: f } = processInbox(inbox.messages, { personal: inbox.personalSkipped });
       setAutoTxns(txns);
       setStats(s);
       setBills(b);
+      setScheduled(sc);
+      setFunds(f);
       setLastSync(Date.now());
       setError(null);
     } catch (e) {
@@ -290,6 +305,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setAutoTxns(d.txns);
     setStats(d.stats);
     setBills(d.bills);
+    setScheduled(d.scheduled);
+    setFunds(d.funds);
     setDemo(d.prefs);
     setLastSync(Date.now());
     setStatus('ready');
@@ -391,6 +408,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAutoTxns([]);
       setStats(EMPTY_STATS);
       setBills([]);
+    setScheduled([]);
+    setFunds([]);
       setSaved((x) => ({ ...x, source: 'manual' }));
       setStatus('ready');
     },
@@ -518,6 +537,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const ignoreSchedule = useCallback(
+    (id: string) => update((x) => ({ ...x, ignoredSchedules: [...new Set([...(x.ignoredSchedules ?? []), id])] })),
+    [update],
+  );
+
   const markBillPaid = useCallback(
     (billId: string, paid: boolean) => {
       update((x) => {
@@ -576,6 +600,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setAutoTxns([]);
     setStats(EMPTY_STATS);
     setBills([]);
+    setScheduled([]);
+    setFunds([]);
     setLastSync(null);
     setError(null);
     setMonth(thisMonth());
@@ -640,9 +666,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     goals: prefs.goals,
     budget: prefs.budget,
     bills,
+    scheduled,
+    funds,
     paidBills: prefs.paidBills ?? [],
     checkedCardPayments: prefs.checkedCardPayments ?? [],
     checkCardPayment,
+    ignoredSchedules: prefs.ignoredSchedules ?? [],
+    ignoreSchedule,
     setMonth,
     refresh,
     requestAccess,

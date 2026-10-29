@@ -87,7 +87,8 @@ export function instrumentKey(t: Txn): string {
 export const billKey = (b: CardBill) => `card:${slug(b.bank)}:${b.account}`;
 
 const CREDIT_HINT = /\bcredit\s*card\b|\bavl\.?\s*(?:credit\s*)?(?:lmt|limit)\b|\bavailable\s+(?:credit\s+)?limit\b/i;
-const DEBIT_HINT = /\bdebit\s*card\b|\bavl\.?\s*bal|\bavailable\s+balance\b/i;
+// A card SMS that shows a bank balance ("Spent Rs.500 From HDFC Bank Card x2232 … Bal Rs.66748") is a debit card.
+const DEBIT_HINT = /\bdebit\s*card\b|\bavl\.?\s*bal|\bavailable\s+balance\b|\bbal(?:ance)?\s*:?\s*(?:rs\.?|inr|₹)\s*[0-9]/i;
 
 export type Instrument = {
   key: string;

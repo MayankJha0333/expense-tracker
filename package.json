@@ -44,7 +44,7 @@
     "test:parser": "npx tsx scripts/test-parser.ts",
     "test:tracking": "npx tsx scripts/test-tracking.ts",
     "test:currency": "npx tsx scripts/test-currency.ts",
-    "test": "npx tsx scripts/test-parser.ts && npx tsx scripts/test-tracking.ts && npx tsx scripts/test-currency.ts && npx tsx scripts/test-update.ts && npx tsx scripts/test-flows.ts && npx tsx scripts/test-month.ts && npx tsx scripts/test-cards.ts",
+    "test": "npx tsx scripts/test-parser.ts && npx tsx scripts/test-tracking.ts && npx tsx scripts/test-currency.ts && npx tsx scripts/test-update.ts && npx tsx scripts/test-flows.ts && npx tsx scripts/test-month.ts && npx tsx scripts/test-cards.ts && npx tsx scripts/test-invest.ts",
     "test:update": "npx tsx scripts/test-update.ts",
     "check:version": "npx tsx scripts/check-version.ts",
     "lint": "expo lint",
@@ -53,7 +53,8 @@
     "scan:sms": "npx tsx scripts/scan-sms.ts",
     "test:flows": "npx tsx scripts/test-flows.ts",
     "test:month": "npx tsx scripts/test-month.ts",
-    "test:cards": "npx tsx scripts/test-cards.ts"
+    "test:cards": "npx tsx scripts/test-cards.ts",
+    "test:invest": "npx tsx scripts/test-invest.ts"
   },
   "private": true
 }

@@ -221,12 +221,15 @@ export function Bars({
   onSelect,
   height = 120,
   color,
+  values = 'all',
 }: {
   data: { label: string; value: number }[];
   selected?: number;
   onSelect?: (index: number) => void;
   height?: number;
   color?: string;
+  /** Amounts over the bars: all, or only the selected one (when many narrow bars would cut them off). */
+  values?: 'all' | 'selected';
 }) {
   const p = usePalette();
   const max = Math.max(1, ...data.map((d) => d.value));
@@ -244,7 +247,7 @@ export function Bars({
             accessibilityLabel={`${d.label}: ${money(d.value)}`}
           >
             <Txt variant="tiny" color={active ? p.ink : p.muted} numberOfLines={1}>
-              {d.value > 0 ? moneyCompact(d.value) : ''}
+              {d.value > 0 && (values === 'all' || active) ? moneyCompact(d.value) : ''}
             </Txt>
             <GrowBar
               index={i}

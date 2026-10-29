@@ -1,4 +1,4 @@
-import { creditCardKeys, instruments, isCardTxn } from './accounts';
+import { creditCardKeys, instrumentKey, instruments, isCardTxn } from './accounts';
 import { inHome } from './currency';
 import { cat, countsAsIncome, countsAsSaving, countsAsSpend, shownAmount, type CardBill, type Txn } from './types';
 
@@ -31,6 +31,11 @@ export type MoneyFlow = {
   spent: number;
   /** Part of `spent` that was on credit cards: leaves your bank when you pay the card bill. */
   spentOnCards: number;
+  /**
+   * How much more cash you have than at the start of the month (across accounts, before SIPs):
+   * income − spending − invested − card bills paid + credit card spending not yet paid.
+   */
+  cashLeft: number;
   invested: number;
   /** Card bills paid from your bank accounts. */
   cardBillsPaid: number;
@@ -86,7 +91,8 @@ export function moneyFlow(txns: Txn[], allTxns: Txn[], bills: CardBill[]): Money
 
   const credit = creditCardKeys(allTxns, bills);
   const accounts: AccountFlow[] = instruments(home, credit)
-    .filter((i) => i.kind === 'bank' || i.kind === 'wallet')
+    // Debit cards take money straight from a bank account, so they are listed with the accounts.
+    .filter((i) => i.kind === 'bank' || i.kind === 'wallet' || i.kind === 'debit_card' || i.kind === 'card')
     .map((i) => {
       const ins = i.txns.filter((t) => t.type === 'credit');
       const outs = i.txns.filter((t) => t.type === 'debit');
@@ -97,12 +103,19 @@ export function moneyFlow(txns: Txn[], allTxns: Txn[], bills: CardBill[]): Money
     .filter((a) => a.moneyIn > 0 || a.moneyOut > 0)
     .sort((a, b) => b.moneyIn + b.moneyOut - (a.moneyIn + a.moneyOut));
 
+  const income = sum(home.filter(countsAsIncome), (t) => t.amount);
+  const spent = sum(spends, (t) => t.amount);
+  // Only credit cards: a debit card takes the money from your bank the same day.
+  const spentOnCards = sum(spends.filter((t) => isCardTxn(t) && credit.has(instrumentKey(t))), (t) => t.amount);
+  const invested = sum(home.filter(countsAsSaving), (t) => t.amount);
+  const cardBillsPaid = sum(debits.filter((t) => notExcluded(t) && t.category === 'card_bill' && !isCardTxn(t)));
   return {
-    income: sum(home.filter(countsAsIncome), (t) => t.amount),
-    spent: sum(spends, (t) => t.amount),
-    spentOnCards: sum(spends.filter(isCardTxn), (t) => t.amount),
-    invested: sum(home.filter(countsAsSaving), (t) => t.amount),
-    cardBillsPaid: sum(debits.filter((t) => notExcluded(t) && t.category === 'card_bill' && !isCardTxn(t))),
+    income,
+    spent,
+    spentOnCards,
+    cashLeft: income - spent - invested - cardBillsPaid + spentOnCards,
+    invested,
+    cardBillsPaid,
     movedOut: sum(debits.filter((t) => notExcluded(t) && t.category === 'self_transfer')),
     movedIn: sum(credits.filter((t) => notExcluded(t) && t.category === 'self_transfer')),
     loansOut: sum(debits.filter((t) => notExcluded(t) && t.category === 'loans')),

@@ -1,6 +1,6 @@
 import { categorize } from './categorize';
-import { coreHeader, keyOf, parseCardNotice, parseSms, type CardBillDraft, type CardNotice, type ParsedTxn, type RawSms } from './parser';
-import type { CardBill, ScanStats, SkipReason, Txn } from './types';
+import { coreHeader, keyOf, parseCardNotice, parseFundName, parseScheduledDebit, parseSms, type CardBillDraft, type CardNotice, type ParsedTxn, type RawSms } from './parser';
+import type { CardBill, ScanStats, ScheduledDebit, SkipReason, Txn } from './types';
 
 const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
 const CARD_BILL_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
@@ -103,6 +103,9 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
   };
   const kept: Txn[] = [];
   const notices: CardNotice[] = [];
+  // Payments the bank said it will take (SIP autopay, mandates), once each.
+  const scheduled = new Map<string, ScheduledDebit>();
+  const funds = new Set<string>();
   // Same text from the same sender within a minute = the phone stored it twice.
   const lastSeen = new Map<string, number>();
 
@@ -116,6 +119,11 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
       bump('duplicate');
       continue;
     }
+
+    const due = parseScheduledDebit(sms);
+    if (due) scheduled.set(`${keyOf(due.name)}|${due.amount}|${due.date}`, due);
+    const fund = parseFundName(sms);
+    if (fund) funds.add(fund);
 
     const r = parseSms(sms);
     if (!r.ok) {
@@ -167,5 +175,5 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
   const personal = extraSkipped.personal ?? 0;
   const stats: ScanStats = { scanned: messages.length + personal, kept: kept.length, skipped };
   const bills = mergeCardNotices(notices).sort((a, b) => b.statementDate - a.statementDate);
-  return { txns: kept, stats, bills };
+  return { txns: kept, stats, bills, scheduled: [...scheduled.values()].sort((a, b) => a.date - b.date), funds: [...funds] };
 }

@@ -226,6 +226,22 @@ export const EMPTY_STATS: ScanStats = { scanned: 0, kept: 0, skipped: {} };
  * A credit card statement read from a "statement generated / amount due" SMS.
  * Not a payment: it says how much to pay and by when.
  */
+/**
+ * A payment the bank said it will take soon: a SIP by UPI AutoPay, or a mandate
+ * ("E-Mandate! Rs.199 will be deducted on 21/10/26 For Netflix").
+ */
+export type ScheduledDebit = {
+  id: string;
+  /** Who the money goes to ("Indian Clearing Corporation", "Netflix"). */
+  name: string;
+  amount: number;
+  /** Midnight at the start of the day it will be taken. */
+  date: number;
+  bank: string | null;
+  /** When the message arrived. */
+  notifiedAt: number;
+};
+
 export type CardBill = {
   id: string;
   bank: string | null;

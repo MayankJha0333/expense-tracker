@@ -24,7 +24,7 @@ export default function FlowScreen() {
   const insets = useSafeAreaInsets();
   const { txns, bills, month, setMonth } = useStore();
   const flow = useMemo(() => moneyFlow(txns.filter((t) => sameMonth(monthOf(t.timestamp), month)), txns, bills), [txns, bills, month]);
-  const leftOver = flow.income - flow.spent - flow.invested;
+  const saved = flow.income - flow.spent;
 
   const moved: { icon: IconName; label: string; amount: string; note: string }[] = [];
   if (flow.cardBillsPaid > 0)
@@ -71,21 +71,27 @@ export default function FlowScreen() {
         </View>
 
         <View>
-          <SectionHeader title="This month" />
+          <SectionHeader title="Saved vs. cash in your accounts" subtitle="Why Home's Saved is not the same as your bank balance" />
           <Card style={{ gap: space.md }}>
             <Row label="Money in (income)" value={`+${money(flow.income)}`} color={p.income} />
-            <Row
-              label="Spent"
-              value={`−${money(flow.spent)}`}
-              note={
-                flow.spentOnCards > 0
-                  ? `${money(flow.spentOnCards)} of this was on credit cards. It leaves your bank when you pay the card bill.`
-                  : undefined
-              }
-            />
-            {flow.invested > 0 ? <Row label="Invested (SIPs and more)" value={`−${money(flow.invested)}`} /> : null}
+            <Row label="Spent this month" value={`−${money(flow.spent)}`} />
             <View style={[styles.rule, { backgroundColor: p.line }]} />
-            <Row label={leftOver >= 0 ? 'Left over' : 'Short by'} value={money(Math.abs(leftOver))} strong color={leftOver >= 0 ? p.income : p.danger} />
+            <Row label={saved >= 0 ? 'Saved (shown on Home)' : 'Overspent (shown on Home)'} value={money(Math.abs(saved))} strong />
+            {flow.invested > 0 ? <Row label="Put into SIPs and investments" value={`−${money(flow.invested)}`} note="Still saved, just not in your bank." /> : null}
+            {flow.cardBillsPaid > 0 ? (
+              <Row label="Card bill paid for last month" value={`−${money(flow.cardBillsPaid)}`} note="Last month's card shopping, paid from this month's money." />
+            ) : null}
+            {flow.spentOnCards > 0 ? (
+              <Row label="Credit card spending not paid yet" value={`+${money(flow.spentOnCards)}`} note="Already in Spent, but it leaves your bank only when next month's bill is paid." />
+            ) : null}
+            <View style={[styles.rule, { backgroundColor: p.line }]} />
+            <Row
+              label={flow.cashLeft >= 0 ? 'Extra cash in your accounts' : 'Cash used from your accounts'}
+              value={`${flow.cashLeft >= 0 ? '+' : '−'}${money(Math.abs(flow.cashLeft))}`}
+              strong
+              color={flow.cashLeft >= 0 ? p.income : p.danger}
+              note="How much your bank balances went up or down this month, all accounts together."
+            />
           </Card>
         </View>
 

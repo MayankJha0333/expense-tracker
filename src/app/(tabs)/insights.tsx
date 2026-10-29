@@ -7,7 +7,7 @@ import { useTabBarSpace } from '../../components/tabBarSpace';
 import { SavingsLine } from '../../components/charts';
 import { Bars, CategoryRow, MonthSwitcher } from '../../components/finance';
 import { AnimatedAmount } from '../../components/AnimatedAmount';
-import { AmountBar, Badge, Card, Divider, Empty, MixBar, NoticeRow, SectionHeader, Segmented, ShareBar, Tag, Txt } from '../../components/ui';
+import { AmountBar, Badge, Card, Divider, Empty, Icon, MixBar, NoticeRow, SectionHeader, Segmented, ShareBar, Tag, Txt } from '../../components/ui';
 import { Stagger } from '../../components/motion';
 import { needsReview, NOT_COUNTED_LABEL, notCountedIncome, PAY_GROUP_LABEL, payGroupColorIndex, payMix } from '../../lib/accounts';
 import {
@@ -19,10 +19,12 @@ import {
   monthShort,
   recurring,
   sameMonth,
+  shortDay,
   summarize,
   type FlowMonth,
   type MonthSummary,
 } from '../../lib/analytics';
+import { investmentOverview } from '../../lib/investments';
 import { formatCount, money, moneyCompact, percent } from '../../lib/money';
 import { useStore } from '../../lib/store';
 import { cat, type SkipReason } from '../../lib/types';
@@ -426,6 +428,51 @@ function Income({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] })
   );
 }
 
+/** SIPs at a glance: this month, last 12 months, the next SIP, and SIPs to check. Opens Investments. */
+function InvestCard() {
+  const p = usePalette();
+  const { txns, scheduled, funds, month, ignoredSchedules } = useStore();
+  const o = useMemo(() => investmentOverview(txns, scheduled, funds, month, new Set(ignoredSchedules)), [txns, scheduled, funds, month, ignoredSchedules]);
+  if (o.last12 === 0 && o.noDebitSeen.length === 0) return null;
+  const next = o.sips.find((s) => s.active);
+  return (
+    <Pressable
+      onPress={() => router.push('/investments')}
+      accessibilityRole="button"
+      accessibilityLabel={`Investments. ${money(o.thisMonth)} in ${monthShort(month)}, ${money(o.last12)} in 12 months. Opens investments.`}
+    >
+      <Card style={{ gap: space.md }}>
+        <View style={styles.line}>
+          <Badge icon="chart-line" color={p.savings} size={40} />
+          <View style={{ flex: 1 }}>
+            <Txt variant="bodyStrong">
+              {money(o.thisMonth)} invested in {monthShort(month)}
+            </Txt>
+            <Txt variant="small" color={p.muted}>
+              {money(o.last12)} in the last 12 months · {o.monthsInvested} of 12 months
+            </Txt>
+          </View>
+          <Icon name="chevron-right" size={20} color={p.muted} />
+        </View>
+        {next ? (
+          <Txt variant="small" color={p.inkSoft}>
+            SIP of {money(next.amount)}
+            {next.perMonth > 1 ? ` × ${next.perMonth}` : ''} a month · next about {shortDay(next.next)}
+          </Txt>
+        ) : null}
+        {o.noDebitSeen.length ? (
+          <View style={[styles.investWarn, { backgroundColor: p.warnSoft }]}>
+            <Icon name="alert-circle-outline" size={16} color={p.warn} />
+            <Txt variant="small" color={p.warn} style={{ flex: 1 }}>
+              {o.noDebitSeen.length} scheduled {o.noDebitSeen.length === 1 ? 'SIP has' : 'SIPs have'} no payment message ({money(o.noDebitSeen.reduce((a, s) => a + s.amount, 0))}). Check them.
+            </Txt>
+          </View>
+        ) : null}
+      </Card>
+    </Pressable>
+  );
+}
+
 function Savings({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] }) {
   const p = usePalette();
   const { goals, budget } = useStore();
@@ -495,17 +542,7 @@ function Savings({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] }
         </Card>
       </View>
 
-      {summary.invested > 0 ? (
-        <Card style={styles.line}>
-          <Badge icon="chart-line" color={p.savings} size={40} />
-          <View style={{ flex: 1 }}>
-            <Txt variant="bodyStrong">{money(summary.invested)} invested in {name}</Txt>
-            <Txt variant="small" color={p.muted}>
-              SIPs and investments are part of what you saved, so they are not counted as spending.
-            </Txt>
-          </View>
-        </Card>
-      ) : null}
+      <InvestCard />
 
       <NoticeRow
         tone="accent"
@@ -565,6 +602,7 @@ const styles = StyleSheet.create({
   facts: { flexDirection: 'row', gap: space.sm },
   fact: { flex: 1, borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, padding: space.md, gap: 4 },
   line: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 },
+  investWarn: { flexDirection: 'row', alignItems: 'center', gap: space.sm, borderRadius: 10, padding: space.md },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.sm },
   donutCard: { flexDirection: 'row', alignItems: 'center', gap: space.xl },
   legendLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
