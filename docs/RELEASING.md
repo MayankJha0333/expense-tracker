@@ -12,17 +12,34 @@
 3. **First upload by hand:** Google's API can't create the first release of a new app. Build once (`eas build -p android --profile production`), download the `.aab`, and upload it yourself in Play Console → Testing → Internal testing. After that, the workflow takes over.
 4. When the app is out of draft (it has been released on any track), change `"releaseStatus": "draft"` to `"completed"` in `eas.json`, or keep promoting releases by hand in Play Console.
 
-### Shipping a release
+### Shipping a release (one command)
+
+Commit your work first, then:
 
 ```
-# 1. bump "version" and "android.versionCode" in app.json (rules below)
-npm run check:version
-git commit -am "Release 1.0.1"
-git tag v1.0.1
-git push && git push --tags
+npm run release:patch    # 1.0.2 → 1.0.3, versionCode +1      (bug fixes, small features)
+npm run release:minor    # 1.0.3 → 1.1.0, versionCode +1      (bigger features)
+npm run release:major    # 1.x   → 2.0.0, versionCode 2001    (asks everyone to update)
 ```
+
+Each one (`scripts/bump-version.ts`):
+
+1. raises the version in `app.json` (`version` and `android.versionCode`), `package.json` and `package-lock.json`, following the build-number rule below;
+2. commits "Release x.y.z" and tags it `vx.y.z`;
+3. pushes the commit and the tag. The tag starts the release workflow: checks, EAS build, upload to Play internal testing.
+
+`npm run bump:patch` does steps 1–2 without pushing, if you want to look first. Then `git push && git push --tags`.
 
 The release workflow stops if the tag doesn't match `version`, or if `versionCode` is in the wrong thousand.
+
+### After the upload
+
+The workflow sends the build to **Internal testing** as a **draft** (`"releaseStatus": "draft"` in `eas.json`):
+
+1. Play Console → Testing → Internal testing → Review release → **Start rollout**.
+2. Promote it to **Closed testing**, and later **Production**, when you are happy with it.
+
+To skip step 1, set `"releaseStatus": "completed"` in `eas.json`; internal builds then go live by themselves.
 
 ## Build numbers (read this before every Play upload)
 
