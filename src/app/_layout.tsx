@@ -55,10 +55,12 @@ function AppShell() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
           <Stack.Screen name="txn/[id]" options={modal} />
+          <Stack.Screen name="link/[id]" options={modal} />
           <Stack.Screen name="add" options={modal} />
           <Stack.Screen name="goal" options={modal} />
           <Stack.Screen name="budget" options={modal} />
           <Stack.Screen name="category/[id]" />
+          <Stack.Screen name="people" />
           <Stack.Screen name="day/[date]" />
           <Stack.Screen name="account/[key]" />
           <Stack.Screen name="goals" />

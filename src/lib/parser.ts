@@ -53,7 +53,7 @@ const BANKS: [string, string][] = [
   ['CITI', 'Citi'], ['SCBANK', 'Standard Chartered'], ['HSBC', 'HSBC'], ['AMEX', 'Amex'],
   ['ONECRD', 'OneCard'], ['IOBCHN', 'IOB'], ['IOBBNK', 'IOB'], ['CENTBK', 'Central Bank'],
   ['INDBNK', 'Indian Bank'], ['UCOBNK', 'UCO Bank'], ['JUPITR', 'Jupiter'], ['FIMONY', 'Fi'],
-  ['SLICE', 'slice'], ['DBSBNK', 'DBS'], ['IDBI', 'IDBI Bank'], ['KVBANK', 'Karur Vysya'],
+  ['SLICE', 'slice'], ['SLCBNK', 'slice'], ['DBSBNK', 'DBS'], ['IDBI', 'IDBI Bank'], ['KVBANK', 'Karur Vysya'],
   ['SIBSMS', 'South Indian Bank'], ['AMZPAY', 'Amazon Pay'], ['AMAZONPAY', 'Amazon Pay'],
   ['PHONPE', 'PhonePe'], ['MOBIKW', 'MobiKwik'], ['EQUITAS', 'Equitas'], ['BANDHN', 'Bandhan Bank'],
 ];
@@ -74,7 +74,7 @@ const REQUEST = /\b(has requested|have requested|requested (money|rs|inr|payment
 const PROMO = /\b(offer|offers|apply now|pre-?approved|click here|t&c|limited (time|period)|congratulations|you have won|you've won|voucher|coupon|discount|get up ?to|lucky|eligible for|avail now|insta ?loan|personal loan|credit limit|upgrade now|hurry|exclusive|kyc)\b|\d+% off/i;
 
 // ---------- transaction signals ----------
-const DEBIT_VERB = /\b(debited|debit of|debit by|spent|paid|sent|withdrawn|withdrawal|purchase|purchased|deducted|charged|txn of|transaction of|transaction was made|used for|used at|for using|transferred|transfer of|payment of)\b/i;
+const DEBIT_VERB = /\b(debited|debit of|debit by|spent|paid|sent|withdrawn|withdrawal|purchase|purchased|deducted|charged|txn of|transaction of|transaction was made|used for|used at|for using|transferred|transfer of|payment of|txn\s+(?:rs|inr|amt))\b/i;
 const CREDIT_VERB = /payment of.{0,50}?\b(received|credited)\b|\b(credited|received|deposited|refund|refunded|reversed|reversal|cashback|added to)\b/i;
 
 const MONEY_MOVED = /\b(debited|credited|spent|sent|received|withdrawn|paid|deducted|transferred|refunded)\b/i;
@@ -107,24 +107,58 @@ const CARD_DATE_ON = new RegExp(
   'gi',
 );
 const AT = new RegExp(
-  String.raw`\bat\s+([A-Za-z][A-Za-z0-9 .&'*_/-]{1,40}?)(?=\s+(?:on|via|using|for|ref|txn|dated|at|by|from)\b|${STOP}|\s+\d{1,2}[-/:]|\s+avl\b|$)`,
+  String.raw`\bat\s+([A-Za-z][A-Za-z0-9 .&@'*_/-]{1,40}?)(?=\s+(?:on|via|using|for|ref|txn|dated|at|by|from)\b|${STOP}|\s+\d{1,2}[-/:]|\s+avl\b|$)`,
   'gi',
 );
 const TO = new RegExp(
-  String.raw`\b(?:trf to|transferred to|paid to|sent to|to)\s+(?:vpa\s+|a/c\s+|beneficiary\s+)?([A-Za-z0-9][A-Za-z0-9 .&@'_-]{1,50}?)(?=\s+(?:on|via|ref|refno|upi|from|dated|using|txn|thru|through|avl|not|if|for)\b|${STOP}|$)`,
+  String.raw`\b(?:trf to|transferred to|paid to|sent to|to)\s+(?:vpa\s+|a/c\s+|beneficiary\s+)?([A-Za-z0-9][A-Za-z0-9 .&@'_-]{1,50}?)(?=\s+(?:on|via|ref|refno|upi|from|dated|using|txn|thru|through|avl|not|if|for)\b|\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b|${STOP}|$)`,
   'gi',
 );
 const FROM = new RegExp(
-  String.raw`\b(?:from|by)\s+(?:vpa\s+|a/c\s+linked\s+to\s+vpa\s+|a/c\s+|upi\s+)?([A-Za-z0-9][A-Za-z0-9 .&@'_-]{1,50}?)(?=\s+(?:on|via|ref|upi|to|dated|avl|info|in|thru|through|for|from|by)\b|${STOP}|$)`,
+  String.raw`\b(?:from|by)\s+(?:vpa\s+|a/c\s+linked\s+to\s+vpa\s+|a/c\s+|upi\s+)?\*?([A-Za-z0-9][A-Za-z0-9 .&@'_-]{1,50}?)(?=\s+(?:on|via|ref|upi|to|dated|avl|info|in|thru|through|for|from|by)\b|${STOP}|$)`,
   'gi',
 );
 
+// "for NEFT Cr-ICIC0SF0002-ACME PRIVATE LIMITED-YOUR NAME-..." → the payer is the part after the IFSC code.
+const NEFT_CR = /\bneft\s+cr-[A-Za-z0-9]{4,11}-([A-Za-z0-9 .&'_]{2,60}?)-/gi;
+// "For IMPS -RAMESH KUMAR- 629312345678" (HDFC).
+const IMPS_FOR = /\bfor\s+imps\s*-\s*([A-Za-z][A-Za-z .]{1,40}?)\s*-/gi;
+// Cash you put in at a deposit machine: your own money, not income.
+export const CASH_DEPOSIT = /\bcash deposit\b|\bcdm\b/i;
+
 const BAD_MERCHANT = new Set([
   'your', 'you', 'a/c', 'ac', 'acct', 'account', 'card', 'the', 'bank', 'upi', 'vpa', 'neft', 'imps',
-  'rtgs', 'transfer', 'self', 'beneficiary', 'mobile', 'net banking', 'netbanking', 'ref', 'linked',
+  'rtgs', 'transfer', 'self', 'beneficiary', 'mobile', 'net banking', 'netbanking', 'ref', 'linked', 'na', 'n/a',
 ]);
+const QR_VPA = /^(paytmqr|paytm\.s|paytm\.d\d|gpay-\d|bharatpe|pinelabs|q\d{6,}|mab\.\d|upiqr)/i;
+const QR_BRAND: Record<string, string> = { paytmqr: 'Paytm', paytms: 'Paytm', paytmd: 'Paytm', gpay: 'Google Pay', bharatpe: 'BharatPe', pinelabs: 'Pine Labs' };
+// Payment gateway IDs with the company squashed in: "hostingerpteltd253083.rzp", "furlenco.payu".
+const GATEWAY_ID = /^([a-z][a-z0-9]{2,40})[._-]?(rzp|razorpay|payu|cashfree|cf|juspay|ccavenue|billdesk)$/i;
+// Matched against the UPI ID with only its letters kept ("zomatoltd32.rzp" -> "zomatoltdrzp"). Order matters.
+const VPA_BRANDS: [RegExp, string][] = [
+  [/zomato/, 'Zomato'],
+  [/instamart/, 'Swiggy Instamart'],
+  [/swiggy/, 'Swiggy'],
+  [/blinkit/, 'Blinkit'],
+  [/zepto/, 'Zepto'],
+  [/bigbasket|^bbnow/, 'BigBasket'],
+  [/flipkart/, 'Flipkart'],
+  [/myntra/, 'Myntra'],
+  [/^amazon|amazonpay/, 'Amazon'],
+  [/^uber/, 'Uber'],
+  [/rapido/, 'Rapido'],
+  [/netflix/, 'Netflix'],
+  [/spotify/, 'Spotify'],
+  [/irctc/, 'IRCTC'],
+  [/bookmyshow/, 'BookMyShow'],
+  [/dominos/, "Domino's"],
+  [/makemytrip/, 'MakeMyTrip'],
+  [/googleplay/, 'Google Play'],
+];
 const MERCHANT_PREFIX = /^(upi[-/ ]|pos[ /]|ecom[ /]|vps[ /]|pg[ /]|iap[ /]|mps[ /]|[a-z]{2,4}\*)/i;
-const MERCHANT_SUFFIX = /\s+(pvt|private|ltd|limited|llp|inc|india|technologies|retail|co)\.?$/i;
+const MERCHANT_SUFFIX = /\s+(pvt|pte|pty|private|ltd|limited|llp|llc|plc|gmbh|inc|india|technologies|retail|co|payu|hyperpg|rzp|razorpay|cashfree|juspay)\.?$/i;
+// A money-back notice: "Your UPI transaction of Rs 1.00 has been reversed". Money came in, even though "transaction of" reads like a debit.
+const REVERSED_NOTICE = /\b(?:has been|have been|was|is|got)\s+(?:reversed|refunded)\b/i;
 // Payroll credits often end with "SALARY" ("ACME PVT LTD SALARY"), which hides the company suffix.
 const PAYROLL_SUFFIX = /\s+(salary|sal|payroll|wages)$/i;
 
@@ -239,7 +273,7 @@ function isValidMerchant(raw: string): boolean {
 }
 
 export function findMerchant(text: string, type: TxnType): string | null {
-  const patterns = type === 'debit' ? [UPI_INFO, ICICI_CREDITED, CARD_DATE_ON, AT, TO] : [UPI_INFO, FROM];
+  const patterns = type === 'debit' ? [UPI_INFO, ICICI_CREDITED, CARD_DATE_ON, AT, TO] : [UPI_INFO, NEFT_CR, IMPS_FOR, FROM];
   for (const rx of patterns) {
     for (const m of matchAll(rx, text)) {
       const candidate = (m[1] ?? '').trim();
@@ -286,6 +320,26 @@ function titleCase(s: string): string {
 export function cleanMerchant(raw: string): { name: string; personLike: boolean } {
   let s = trimChars(raw.trim(), '.,-:*/ ');
   let personLike = false;
+  // Shop QR codes ("paytmqr1wa07shpuw@paytm", "bharatpe.9s0q0l...") carry no readable shop name.
+  // Banks often cut the ID short and drop the "@...", so check before splitting.
+  const qr = QR_VPA.exec(s);
+  if (qr) {
+    const brand = QR_BRAND[qr[1].toLowerCase().replace(/[^a-z]/g, '')];
+    return { name: brand ? `${brand} QR payment` : 'QR payment', personLike: false };
+  }
+  // Payment IDs like "payzomato@hdfcbank", "zomatoltd32.rzp" or "upiswiggy" belong to a big brand: use its plain name.
+  // A bare ID with no spaces counts too, since banks often cut off the "@...".
+  if (s.includes('@') || !/\s/.test(s)) {
+    const compact = s.split('@')[0].toLowerCase().replace(/[^a-z]/g, '');
+    const brand = VPA_BRANDS.find(([rx]) => rx.test(compact));
+    if (brand) return { name: brand[1], personLike: false };
+  }
+  const gateway = !/\s/.test(s) && !s.includes('@') ? GATEWAY_ID.exec(s) : null;
+  if (gateway) {
+    // "hostingerpteltd253083" -> "hostinger": drop the order number and the squashed company ending.
+    const base = gateway[1].replace(/\d+$/, '').replace(/(pvt|pte)?(ltd|limited)$/i, '').replace(/private$/i, '');
+    if (base.length >= 3) return { name: titleCase(base), personLike: false };
+  }
   if (s.includes('@')) {
     const [local, handleRaw = ''] = s.split('@');
     const handle = handleRaw.toLowerCase();
@@ -343,7 +397,7 @@ export function parseSms(sms: RawSms): ParseResult {
   const debitAt = DEBIT_VERB.exec(text)?.index ?? Infinity;
   const creditAt = CREDIT_VERB.exec(text)?.index ?? Infinity;
   if (debitAt === Infinity && creditAt === Infinity) return { ok: false, reason: 'not_transaction' };
-  const type: TxnType = creditAt <= debitAt ? 'credit' : 'debit';
+  const type: TxnType = REVERSED_NOTICE.test(text) || creditAt <= debitAt ? 'credit' : 'debit';
 
   // A real bank alert names an account / card, or comes from a known bank or wallet.
   if (account === null && bank === null) return { ok: false, reason: 'not_transaction' };
@@ -355,10 +409,15 @@ export function parseSms(sms: RawSms): ParseResult {
   const currency = found.currency ?? (senderBank ? 'INR' : null);
 
   const mode = findMode(text);
-  const raw = findMerchant(text, type) ?? merchantFromLines(sms.body);
+  const raw = REVERSED_NOTICE.test(text) && type === 'credit' ? (findMerchant(text, type) ?? 'Payment reversed') : (findMerchant(text, type) ?? merchantFromLines(sms.body));
   const cleaned = raw ? cleanMerchant(raw) : null;
   // ATM text is full of machine IDs, so use a plain name instead.
-  const merchant = mode === 'atm' ? fallbackName(type, mode, bank) : cleaned?.name ?? fallbackName(type, mode, bank);
+  const merchant =
+    mode === 'atm'
+      ? fallbackName(type, mode, bank)
+      : type === 'credit' && CASH_DEPOSIT.test(text)
+        ? 'Cash deposit'
+        : (cleaned?.name ?? fallbackName(type, mode, bank));
   const personLike = (cleaned?.personLike ?? false) || P2A.test(text);
 
   return {

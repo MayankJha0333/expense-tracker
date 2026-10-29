@@ -3,6 +3,7 @@ import { coreHeader, keyOf, parseCardBill, parseSms, type ParsedTxn, type RawSms
 import type { CardBill, ScanStats, SkipReason, Txn } from './types';
 
 const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
+const CARD_BILL_WINDOW_MS = 4 * 24 * 60 * 60 * 1000;
 
 /**
  * Same amount, same direction, same account, within 5 minutes, but from a
@@ -24,6 +25,21 @@ function isDuplicate(kept: Txn[], p: ParsedTxn, sms: RawSms): boolean {
     ) {
       return true;
     }
+  }
+  return false;
+}
+
+/**
+ * Banks often confirm one credit card bill payment twice, days apart and from the same sender
+ * ("payment received towards your credit card" on the 3rd, "online payment credited to your card" on the 5th).
+ * Same card, same exact amount, within 4 days = one payment.
+ */
+function isRepeatCardBill(kept: Txn[], amount: number, account: string | null, at: number): boolean {
+  const cents = Math.round(amount * 100);
+  for (let i = kept.length - 1; i >= 0; i--) {
+    const t = kept[i];
+    if (at - t.timestamp > CARD_BILL_WINDOW_MS) break;
+    if (t.category === 'card_bill' && t.type === 'credit' && t.account === account && Math.round(t.amount * 100) === cents) return true;
   }
   return false;
 }
@@ -66,6 +82,10 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
       continue;
     }
     const category = categorize(p, sms.body);
+    if (category === 'card_bill' && p.type === 'credit' && p.account !== null && isRepeatCardBill(kept, p.amount, p.account, sms.date)) {
+      bump('duplicate');
+      continue;
+    }
     // "Credit to SBI" says nothing; for interest the bank is the source.
     let merchant = category === 'interest' && p.bank && /^Credit to /.test(p.merchant) ? `${p.bank} interest` : p.merchant;
     // "Payment received on your credit card" names no shop; say what it is.

@@ -58,7 +58,13 @@ const MONTHS_BACK = 13;
 const MAX_MESSAGES = 8000;
 
 /** Reads about the last 13 months of inbox messages from non-personal senders. */
+/** Development builds only: a test inbox put here by hand stands in for the phone's SMS. See scripts/scan-sms.ts. */
+type DevGlobals = { __KHARCHA_TEST_INBOX__?: InboxResult; __KHARCHA_RESCAN__?: () => Promise<void> };
+export const devGlobals = globalThis as DevGlobals;
+const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
 export async function readInbox(): Promise<InboxResult> {
+  if (isDev && devGlobals.__KHARCHA_TEST_INBOX__) return devGlobals.__KHARCHA_TEST_INBOX__;
   if (!SmsReader) throw new Error('SMS reader is not in this build');
   const since = new Date();
   since.setMonth(since.getMonth() - MONTHS_BACK, 1);

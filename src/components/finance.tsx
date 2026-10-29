@@ -3,10 +3,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { needsReview, payLabel, type CardDue } from '../lib/accounts';
-import { addMonths, daysInMonth, isAfter, monthKey, monthName, monthShort, sameMonth, shortDay, thisMonth, timeLabel, type Month } from '../lib/analytics';
+import { kindLabel } from '../lib/purposes';
+import { addMonths, dateKey as toDateKey, dayOfMonth, daysInMonth, getMonthStart, isAfter, monthKey, monthName, monthShort, monthStartDate, sameMonth, shortDay, thisMonth, timeLabel, type Month } from '../lib/analytics';
 import { currencyOf } from '../lib/currency';
 import { money, moneyCompact, percent } from '../lib/money';
-import { cat, countsAsIncome, countsAsSaving, countsAsSpend, isForeign, type CategoryId, type Txn } from '../lib/types';
+import { cat, countsAsIncome, countsAsSaving, countsAsSpend, isForeign, shownAmount, type CategoryId, type Txn } from '../lib/types';
 import { alpha, radius, space, usePalette, type Palette } from '../theme';
 import { GrowBar } from './charts';
 import { enterFade, PressScale } from './motion';
@@ -44,12 +45,16 @@ export function TxnRow({ txn, showDate }: { txn: Txn; showDate?: boolean }) {
   const code = currencyOf(txn);
   const counted = foreign ? !txn.excluded : countsAsSpend(txn) || countsAsIncome(txn) || countsAsSaving(txn);
   const review = needsReview(txn);
-  const amountText = money(txn.amount, { currency: code, decimals: txn.amount < 100 ? true : undefined });
+  const full = shownAmount(txn);
+  const amountText = money(full, { currency: code, decimals: full < 100 ? true : undefined });
+  const flow = flowLabel(txn);
+  // Part of it came back: show what you really spent under the amount.
+  const kept = !txn.netted && txn.grossAmount !== undefined ? money(txn.amount, { currency: code }) : null;
   const when = showDate
     ? shortDay(txn.timestamp)
     : timeLabel(txn.timestamp);
   const pay = payLabel(txn);
-  const label = counted ? c.label : 'Not counted';
+  const label = flow ?? (counted ? kindLabel(txn, c.label) : 'Not counted');
   return (
     <PressScale
       onPress={() => router.push(`/txn/${txn.id}`)}
@@ -86,11 +91,27 @@ export function TxnRow({ txn, showDate }: { txn: Txn; showDate?: boolean }) {
           {amountText}
         </Txt>
         <Txt variant="tiny" color={p.muted} numberOfLines={1}>
-          {when}
+          {kept ? `${kept} after refund · ${when}` : when}
         </Txt>
       </View>
     </PressScale>
   );
+}
+
+/** What a linked payment is, in a few words. Null when it isn't linked. */
+export function flowLabel(txn: Txn): string | null {
+  const credit = txn.type === 'credit';
+  const links = txn.links ?? [];
+  if (links.some((l) => l.kind === 'transfer')) {
+    if (txn.category === 'card_bill') return credit ? 'Card bill paid' : 'Paid your card bill';
+    return credit ? 'From your own account' : 'To your own account';
+  }
+  if (links.some((l) => l.kind === 'refund')) {
+    if (credit) return 'Refund, taken off the purchase';
+    return txn.netted ? 'Refunded in full' : `${cat(txn.category).label} · part refunded`;
+  }
+  if (txn.category === 'self_transfer') return 'Your own money moved';
+  return null;
 }
 
 /** "‹  October 2026  ›" — the next arrow stops at the current month. [compact] = small pill. */
@@ -106,7 +127,7 @@ export function MonthSwitcher({ month, onChange, light, compact }: { month: Mont
         </Pressable>
         <Animated.View key={monthKey(month)} entering={enterFade}>
           <Txt variant="smallStrong" style={{ minWidth: 70, textAlign: 'center' }}>
-            {monthShort(month)} {month.year}
+            {getMonthStart() === 1 ? `${monthShort(month)} ${month.year}` : monthName(month)}
           </Txt>
         </Animated.View>
         <Pressable
@@ -165,17 +186,20 @@ export function StackedBar({ slices, height = 12 }: { slices: { category: Catego
 export function HeatCalendar({ month, byDay }: { month: Month; byDay: Record<number, number> }) {
   const p = usePalette();
   const total = daysInMonth(month);
-  const firstWeekday = (new Date(month.year, month.month, 1).getDay() + 6) % 7; // Monday = 0
+  const start = monthStartDate(month);
+  const firstWeekday = (start.getDay() + 6) % 7; // Monday = 0
   const max = Math.max(0, ...Object.values(byDay));
-  const today = new Date();
   const isCurrent = sameMonth(month, thisMonth());
+  const todayIndex = isCurrent ? dayOfMonth(new Date().getTime()) : 0;
 
+  // Cells hold the day's place in the month (1 = first day), which is what byDay is keyed by.
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstWeekday; i++) cells.push(null);
   for (let d = 1; d <= total; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
   const weeks: (number | null)[][] = [];
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  const dateAt = (index: number) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index - 1);
 
   const level = (amt: number) => {
     if (amt <= 0 || max <= 0) return 0;
@@ -198,15 +222,16 @@ export function HeatCalendar({ month, byDay }: { month: Month; byDay: Record<num
             if (day === null) return <View key={di} style={styles.cell} />;
             const amt = byDay[day] ?? 0;
             const lv = level(amt);
-            const future = isCurrent && day > today.getDate();
-            const isToday = isCurrent && day === today.getDate();
-            const dateKey = `${month.year}-${String(month.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const date = dateAt(day);
+            const future = isCurrent && day > todayIndex;
+            const isToday = isCurrent && day === todayIndex;
+            const dateKey = toDateKey(date.getTime());
             return (
               <Pressable
                 key={di}
                 disabled={future}
                 onPress={() => router.push(`/day/${dateKey}`)}
-                accessibilityLabel={`${day} ${monthShort(month)}, ${amt > 0 ? money(amt) + ' spent' : 'no spending'}`}
+                accessibilityLabel={`${shortDay(date.getTime(), true)}, ${amt > 0 ? money(amt) + ' spent' : 'no spending'}`}
                 style={[
                   styles.cell,
                   styles.cellBox,
@@ -219,7 +244,7 @@ export function HeatCalendar({ month, byDay }: { month: Month; byDay: Record<num
                 ]}
               >
                 <Txt variant="tiny" color={lv > 0.62 ? p.onAccent : lv > 0 ? p.ink : p.muted}>
-                  {day}
+                  {date.getDate()}
                 </Txt>
               </Pressable>
             );

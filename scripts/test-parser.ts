@@ -13,6 +13,24 @@ const CASES: [string, string, string][] = [
   ['AX-SBIUPI', 'Dear UPI user A/C X9876 debited by 60.0 on date 09Oct26 trf to UBER INDIA SYSTEMS Refno 628212345678. If not u? call 1800111109. -SBI', 'debit 60 Uber India Systems transport upi 9876'],
   ['VK-AXISBK', 'INR 845.00 debited\nA/c no. XX3344\n11-10-26, 20:14:33\nUPI/P2M/628498765432/BLINKIT\nNot you? SMS BLOCKALL 3344 to 919951860002\nAxis Bank', 'debit 845 Blinkit groceries upi 3344'],
   ['BZ-KOTAKB-S', 'Sent Rs.500.00 from Kotak Bank AC X5566 to ramesh.kumar@okaxis on 08-10-26.UPI Ref 628311112222. Not you, kotak.com/KBANKT/Fraud', 'debit 500 Ramesh Kumar people upi 5566'],
+  ['AX-SBIUPI', 'Dear UPI user A/C X9876 debited by 1000.0 on date 11Oct26 trf to S MEENA Refno 628412345670. If not u? call 1800111109. -SBI', 'debit 1000 S Meena people upi 9876'],
+  ['AD-HDFCBK-S', 'Txn Rs.349.00 On HDFC Bank Card 2232 At payzomato@hdfcbank by UPI 630112345678 On 24-10 Not You? Call 18002586161/SMS BLOCK CC 2232 to 7308080808', 'debit 349 Zomato food upi 2232'],
+  ['AD-HDFCBK-S', 'Txn Rs.120.00 On HDFC Bank Card 2232 At paytmqr1wa07shpuw@paytm by UPI 630112345679 On 24-10 Not You? Call 18002586161/SMS BLOCK CC 2232 to 7308080808', 'debit 120 Paytm QR payment other upi 2232'],
+  ['AD-HDFCBK-S', 'Txn Rs.2500.00 On HDFC Bank Card 2232 At NA by UPI 630112345680 On 24-10 Not You? Call 18002586161/SMS BLOCK CC 2232 to 7308080808', 'debit 2500 UPI payment other upi 2232'],
+  ['AD-HDFCBK-S', 'Txn Rs.88.00 On HDFC Bank Card 2232 At upiswiggy@icici by UPI 630112345681 On 25-10 Not You? Call 18002586161/SMS BLOCK CC 2232 to 7308080808', 'debit 88 Swiggy food upi 2232'],
+  ['AD-HDFCBK-S', 'Txn Rs.640.00 On HDFC Bank Card 2232 At zomatoltd32.rzp@hdfcbank by UPI 630112345682 On 25-10 Not You? Call 18002586161/SMS BLOCK CC 2232 to 7308080808', 'debit 640 Zomato food upi 2232'],
+  ['AD-HDFCBK-S', 'Txn Rs.410.00 On HDFC Bank Card 2232 At blinkit.rzp@hdfcbank by UPI 630112345683 On 25-10 Not You? Call 18002586161/SMS BLOCK CC 2232 to 7308080808', 'debit 410 Blinkit groceries upi 2232'],
+  ['AD-HDFCBK-S', 'Txn Rs.60.00 On HDFC Bank Card 2232 At Paytmqr281005050101r497rx by UPI 630112345684 On 26-10 Not You? Call 18002586161/SMS BLOCK CC 2232 to 7308080808', 'debit 60 Paytm QR payment other upi 2232'],
+  ['AD-HDFCBK-S', 'Txn Rs.75.00 On HDFC Bank Card 2232 At q123456789@ybl by UPI 630112345685 On 26-10 Not You? Call 18002586161/SMS BLOCK CC 2232 to 7308080808', 'debit 75 QR payment other upi 2232'],
+  ['AD-HDFCBK-S', 'Txn Rs.230.00 On HDFC Bank Card 2232 At Zeptomarketplac675861.rzp by UPI 630112345686 On 26-10 Not You? Call 18002586161/SMS BLOCK CC 2232 to 7308080808', 'debit 230 Zepto groceries upi 2232'],
+  ['AD-HDFCBK-S', 'UPI Mandate: Sent Rs.649.00 from HDFC Bank A/c 4521 To NETFLIX 07/10/26 Ref 628912345678 Not You? Call 18002586161/SMS BLOCK UPI to 7308080808', 'debit 649 Netflix entertainment upi 4521'],
+  ['AD-HDFCBK-S', 'UPI Mandate: Sent Rs.3199.00 from HDFC Bank A/c 4521 To Furlenco 05/10/26 Ref 628912345679 Not You? Call 18002586161/SMS BLOCK UPI to 7308080808', 'debit 3199 Furlenco home upi 4521'],
+  ['VM-HDFCBK-S', 'Update! INR 1,16,932.00 deposited in HDFC Bank A/c XX7175 on 03-OCT-26 for NEFT Cr-ICIC0SF0002-SPLITX SOLUTIONS PRIVATE LIMITED-MAYANKJHA-INXXXXXXXXXX1234.Avl bal INR 1,20,000.00. Cheque deposits in A/C are subject to clearing', 'credit 116932 Splitx Solutions received netbanking 7175'],
+  ['VM-HDFCBK-S', 'HDFC Bank Cardmember, Online Payment of Rs.49243 vide Ref# 1234567890FAzQT was credited to your card ending 8429 On 05/OCT/2026_value Date 05/OCT/2026', 'credit 49243 * card_bill card 8429'],
+  ['VM-HDFCBK-S', 'Deposited! INR 20,000.00 in HDFC Bank A/c XX7175 On 12/10/26 14:22:10 At JHANSI Via Cash Deposit Machine Bal: INR 50,000.00', 'credit 20000 Cash deposit self_transfer other 7175'],
+  ['VM-HDFCBK-S', 'Credit Alert! Rs.700.00 credited to HDFC Bank A/c XX7175 on 20-10-26 from VPA *1234@slc (UPI 629312345678)', 'credit 700 1234@slc received upi 7175'],
+  ['VM-HDFCBK-S', 'Received! INR 5,000.00 in HDFC Bank A/c xx7175 On 15-10-26 For IMPS -HIMANSHUKUMAR- 629312345679 Avl bal INR 55,000.00', 'credit 5000 Himanshukumar received netbanking 7175'],
+  ['AX-SBIUPI', 'Dear UPI user A/C X9876 debited by 53.0 on date 08Oct26 trf to SHARATH K R Refno 628412345671. If not u? call 1800111109. -SBI', 'debit 53 Sharath K R people upi 9876'],
   ['AD-HDFCBK', 'Money Received - INR 52,000.00 in your HDFC Bank A/c xx4521 on 01-10-26 by NEFT from ACME TECHNOLOGIES PVT LTD SALARY OCT. Avl bal: INR 61,234.00', 'credit 52000 * salary netbanking 4521'],
   ['VM-SBIINB', 'Dear Customer, Rs.5,000.00 withdrawn at SBI ATM S1BW000123 from A/c X9876 on 07Oct26. Avl Bal Rs.12,345.00. -SBI', 'debit 5000 * cash atm 9876'],
   ['AD-ICICIB', 'Dear Customer, Payment of INR 12,450.00 has been received on your ICICI Bank Credit Card Account 4XXX1234 on 05-Oct-26. Thank you.', 'credit 12450 * card_bill card 1234'],
@@ -40,6 +58,19 @@ const CASES: [string, string, string][] = [
   ['AD-HDFCBK', 'Get Rs 500 cashback on spends of Rs 5000 with your HDFC Bank Card XX7788. Offer valid till 31 Oct. T&C apply', 'skip promo'],
   ['JD-SBIINB', 'Your a/c no. XXXXXXXX9876 is credited by Rs.25.00 on 30Sep26 as interest. -SBI', 'credit 25 * interest other 9876'],
   ['VM-ICICIT', 'Dear Customer, Acct XX123 is credited with INR 1,999.00 on 12-Oct-26 from MYNTRA. Refund ref 8812. -ICICI Bank', 'credit 1999 Myntra refund other 123'],
+  // A company paid by UPI autopay is not a person, and "Pte Ltd" is dropped from the name.
+  ['VM-HDFCBK-S', 'UPI Mandate: Sent Rs.234.82 from HDFC Bank A/c 7175 To HOSTINGER PTE LTD 20/10/26 Ref 110963977196 Not You? Call 18002586161/SMS BLOCK UPI to 7308080808', 'debit 234.82 Hostinger software upi 7175'],
+  ['JD-HDFCBK-S', 'UPI Mandate: Sent Rs.499.00 from HDFC Bank A/c 7175 To RAMESH KUMAR 20/10/26 Ref 110963977197 Not You? Call 18002586161/SMS BLOCK UPI to 7308080808', 'debit 499 Ramesh Kumar other upi 7175'],
+  // A gateway ID with the company squashed in.
+  ['VM-HDFCBK-S', 'Txn Rs.1081.40 On HDFC Bank Card 8429 At hostingerpteltd253083.rzp by UPI 627600540211 On 03-10 Not You? Call 18002586161/SMS BLOCK CC 8429 to 7308080808', 'debit 1081.4 Hostinger software upi 8429'],
+  // Google Pay and Paytm shop QR codes.
+  ['JM-HDFCBK-S', 'Txn Rs.45.00 On HDFC Bank Card 8429 At gpay-11265872972@okbizaxis by UPI 123799215443 On 27-05 Not You? Call 18002586161/SMS BLOCK CC 8429 to 7308080808', 'debit 45 Google Pay QR payment other upi 8429'],
+  ['JM-HDFCBK-S', 'Txn Rs.210.00 On HDFC Bank Card 8429 At paytm.d8838090@pty by UPI 124032687566 On 01-06 Not You? Call 18002586161/SMS BLOCK CC 8429 to 7308080808', 'debit 210 Paytm QR payment other upi 8429'],
+  // Money given back, even though it starts like a debit.
+  ['AD-HDFCBK-S', 'Your UPI transaction of Rs 1059.64 has been reversed in your HDFC Bank Credit Card due to technical problem (UPI Ref no. 127998764024)', 'credit 1059.64 Payment reversed refund upi -'],
+  // Shops with name-like words.
+  ['VM-HDFCBK-S', 'Sent Rs.120.00 From HDFC Bank A/C *7175 To PANCHAKATTU DOSA MADHAPUR On 16/11/25 Ref 114249883099 Not You? Call 18002586161/SMS BLOCK UPI to 7308080808', 'debit 120 Panchakattu Dosa Madhapur food upi 7175'],
+  ['JD-SBIUPI-S', 'Dear UPI user A/C X1346 debited by 5000.00 on date 11Jun26 trf to Indian Clearing Refno 109993668710 If not u? call-1800111109 for other services-18001234-SBI', 'debit 5000 Indian Clearing investments upi 1346'],
 ];
 
 let pass = 0;
@@ -72,4 +103,15 @@ console.log('pipeline', stats);
 const s = summarize(txns, thisMonth());
 console.log('spent', money(s.spent), 'received', money(s.received), s.byCategory.map((c) => `${c.category}:${money(c.amount)}`).join(' '));
 console.log(money(1234567), money(999.5, { decimals: true }), moneyCompact(152000), moneyCompact(45230));
-if (pass !== CASES.length) process.exit(1);
+// One card bill payment confirmed twice by the same bank, two days apart, counts once.
+// The same amount paid again next month is a new payment.
+const DAY = 86_400_000;
+const repeat = processInbox([
+  { id: 'b1', sender: 'AD-HDFCBK-S', body: 'DEAR HDFCBANK CARDMEMBER, PAYMENT OF Rs. 49243.00 RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH 8429 ON 3-10-2026.YOUR AVAILABLE LIMIT IS RS. 72649.28', date: now - 2 * DAY },
+  { id: 'b2', sender: 'BP-HDFCBK-S', body: 'HDFC Bank Cardmember, Online Payment of Rs.49243 vide Ref# 1234567890FAzQT was credited to your card ending 8429 On 04/OCT/2026_value Date 03/OCT/2026', date: now },
+  { id: 'b3', sender: 'BP-HDFCBK-S', body: 'HDFC Bank Cardmember, Online Payment of Rs.49243 vide Ref# 1234567891FAzQT was credited to your card ending 8429 On 04/NOV/2026_value Date 03/NOV/2026', date: now + 30 * DAY },
+]);
+const billsKept = repeat.txns.filter((t) => t.category === 'card_bill').length;
+const billOk = billsKept === 2;
+console.log(`${billOk ? 'PASS' : 'FAIL'} repeated card bill alert counts once (kept ${billsKept} of 3; next month's stays)`);
+if (pass !== CASES.length || !billOk) process.exit(1);

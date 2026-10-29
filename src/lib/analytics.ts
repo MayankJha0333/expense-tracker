@@ -5,9 +5,31 @@ import { cat, countsAsIncome, countsAsSaving, countsAsSpend, type CategoryId, ty
 /** A month written as { year, month } where month is 0-11 (like JS Date). */
 export type Month = { year: number; month: number };
 
+/**
+ * The day of the calendar month a "month" starts on, 1-28. People paid on the
+ * 5th or 7th can start their month there so salary and the spending it pays
+ * for land in the same month. A month is named after the calendar month it
+ * starts in: with a start of 7, "October" runs 7 Oct to 6 Nov.
+ */
+let cycleStart = 1;
+export const MONTH_START_MAX = 28;
+export const clampMonthStart = (day: number) => (Number.isFinite(day) ? Math.min(MONTH_START_MAX, Math.max(1, Math.round(day))) : 1);
+export const getMonthStart = () => cycleStart;
+/** Set for the whole app before render, like the home currency. */
+export function setMonthStart(day: number) {
+  cycleStart = clampMonthStart(day);
+}
+
+/** Midnight on the first day of [m]. */
+export const monthStartDate = (m: Month) => new Date(m.year, m.month, cycleStart);
+/** Midnight on the first day of the next month, so the end is exclusive. */
+export const monthEndDate = (m: Month) => new Date(m.year, m.month + 1, cycleStart);
+
 export const monthOf = (ts: number): Month => {
   const d = new Date(ts);
-  return { year: d.getFullYear(), month: d.getMonth() };
+  const back = d.getDate() < cycleStart ? 1 : 0;
+  const first = new Date(d.getFullYear(), d.getMonth() - back, 1);
+  return { year: first.getFullYear(), month: first.getMonth() };
 };
 export const thisMonth = (): Month => monthOf(Date.now());
 export const sameMonth = (a: Month, b: Month) => a.year === b.year && a.month === b.month;
@@ -20,15 +42,43 @@ export const parseMonthKey = (k: string | undefined): Month | null => {
   const hit = /^(\d{4})-(\d{2})$/.exec(k ?? '');
   return hit ? { year: Number(hit[1]), month: Number(hit[2]) - 1 } : null;
 };
-export const daysInMonth = (m: Month) => new Date(m.year, m.month + 1, 0).getDate();
+/** Days between [a] and [b] at midnight, safe across daylight saving changes. */
+const daysBetween = (a: Date, b: Date) =>
+  Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86_400_000);
+export const daysInMonth = (m: Month) => daysBetween(monthStartDate(m), monthEndDate(m));
+/** Which day of its month [ts] falls on, 1-based. With a start of 7, 7 Oct is day 1. */
+export const dayOfMonth = (ts: number) => {
+  const d = new Date(ts);
+  return daysBetween(monthStartDate(monthOf(ts)), new Date(d.getFullYear(), d.getMonth(), d.getDate())) + 1;
+};
 export const isAfter = (a: Month, b: Month) => a.year > b.year || (a.year === b.year && a.month > b.month);
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export const monthName = (m: Month) => `${MONTHS[m.month]} ${m.year}`;
 export const monthShort = (m: Month) => MONTHS_SHORT[m.month];
+
+const dayMon = (d: Date) => (monthFirstDates() ? `${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}` : `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`);
+
+/** "7 Oct – 6 Nov", the dates a month covers. */
+export function monthRange(m: Month): string {
+  const end = monthEndDate(m);
+  end.setDate(end.getDate() - 1);
+  return `${dayMon(monthStartDate(m))} – ${dayMon(end)}`;
+}
+
+/**
+ * The month as people say it: "October", or "7 Oct – 6 Nov" when months start
+ * later than the 1st. No year.
+ */
+export const monthTitle = (m: Month) => (cycleStart === 1 ? MONTHS[m.month] : monthRange(m));
+
+/** "October 2026", or "7 Oct – 6 Nov" (with the year when it is not this year). */
+export function monthName(m: Month): string {
+  if (cycleStart === 1) return `${MONTHS[m.month]} ${m.year}`;
+  return m.year === thisMonth().year ? monthRange(m) : `${monthRange(m)} ${m.year}`;
+}
 
 /** "15 Nov" or "Nov 15" (US). [long] gives "15 November". */
 export function shortDay(ts: number, long = false): string {
@@ -88,7 +138,7 @@ export type MonthSummary = {
   incomeByCategory: CategorySlice[];
   incomeSources: IncomeSource[];
   byCategory: CategorySlice[];
-  /** Day of month (1..31) → amount spent. */
+  /** Day of the month (1 = the month's first day, see dayOfMonth) → amount spent. */
   byDay: Record<number, number>;
   byMode: ModeStat[];
   topMerchants: MerchantStat[];
@@ -144,7 +194,7 @@ export function summarize(all: Txn[], month: Month): MonthSummary {
 
   const byDay: Record<number, number> = {};
   for (const t of spends) {
-    const day = new Date(t.timestamp).getDate();
+    const day = dayOfMonth(t.timestamp);
     byDay[day] = (byDay[day] ?? 0) + t.amount;
   }
 
@@ -166,7 +216,7 @@ export function summarize(all: Txn[], month: Month): MonthSummary {
     .slice(0, 8);
 
   const now = thisMonth();
-  const days = sameMonth(month, now) ? new Date().getDate() : isAfter(month, now) ? 1 : daysInMonth(month);
+  const days = sameMonth(month, now) ? dayOfMonth(Date.now()) : isAfter(month, now) ? 1 : daysInMonth(month);
 
   let biggest: Txn | null = null;
   for (const t of spends) if (!biggest || t.amount > biggest.amount) biggest = t;

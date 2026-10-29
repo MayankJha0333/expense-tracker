@@ -75,3 +75,6 @@ coverage/
 
 # Local snapshots made before big changes (not part of the app)
 _backup/
+
+# real SMS exports for local testing — never commit
+/private/

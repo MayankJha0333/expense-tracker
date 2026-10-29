@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
-import { thisMonth, type Month } from './analytics';
+import { clampMonthStart, setMonthStart as applyMonthStart, thisMonth, type Month } from './analytics';
 import {
   currencyForLocale,
   getHomeCurrency,
@@ -15,17 +15,21 @@ import {
 import { demoExtras, demoInbox, SAMPLE_DATA_ENABLED, SAMPLE_KINDS, type SampleKind } from './demo';
 import { deviceLocale } from './deviceLocale';
 import { keyOf } from './parser';
+import { pairKey, resolveFlows, type FlowPrefs } from './flows';
 import { processInbox } from './pipeline';
-import { checkSmsPermission, readInbox, requestSmsPermission, type SmsPermission } from './sms';
+import { isPurposeId, purpose } from './purposes';
+import { checkSmsPermission, devGlobals, readInbox, requestSmsPermission, type SmsPermission } from './sms';
 import {
   CREDIT_CATEGORIES,
   DEBIT_CATEGORIES,
   EMPTY_STATS,
   type CardBill,
   type CategoryId,
+  type LinkKind,
   type DataSource,
   type Goal,
   type PayMode,
+  type PurposeId,
   type ScanStats,
   type Txn,
   type TxnType,
@@ -51,14 +55,37 @@ type Prefs = {
   budget: number | null;
   /** Credit card statements you marked as paid (bill ids). */
   paidBills: string[];
+  /** Links between payments you made by hand (see lib/flows.ts). */
+  links: FlowPrefs['links'];
+  /** Links Kharcha found that you removed. */
+  unlinked: string[];
+  /** Other names your banks use for you. */
+  ownNames: string[];
+  /** merchantKey → what you pay this person for ("cook", "rent"). Comes with a matching rule. */
+  purposes: Record<string, PurposeId>;
 };
 
-const EMPTY_PREFS: Prefs = { source: null, rules: {}, overrides: {}, excluded: [], manual: [], goals: [], budget: null, paidBills: [] };
+const EMPTY_PREFS: Prefs = {
+  source: null,
+  rules: {},
+  overrides: {},
+  excluded: [],
+  manual: [],
+  goals: [],
+  budget: null,
+  paidBills: [],
+  links: [],
+  unlinked: [],
+  ownNames: [],
+  purposes: {},
+};
 const STORAGE_KEY = 'kharcha:prefs:v2';
 const LEGACY_KEY = 'kharcha:prefs:v1';
 /** Kept apart from prefs so the choice also holds while you look at sample data. */
 const CURRENCY_KEY = 'kharcha:currency:v1';
 const SAMPLE_KEY = 'kharcha:sample:v1';
+/** The day your month starts on (1-28). */
+const MONTH_START_KEY = 'kharcha:monthStart:v1';
 const AUTO_REFRESH_GAP_MS = 60_000;
 
 export type Status = 'booting' | 'onboarding' | 'loading' | 'ready';
@@ -86,6 +113,9 @@ type Store = {
   /** What "auto" would pick right now. */
   autoCurrency: CurrencyCode;
   setCurrencySetting: (s: CurrencySetting) => void;
+  /** The day of the calendar month your month starts on, 1-28 (1 = calendar months). */
+  monthStart: number;
+  setMonthStart: (day: number) => void;
   /** Which sample data set is showing (when source is demo). */
   sample: SampleKind;
   setSample: (kind: SampleKind) => void;
@@ -106,6 +136,8 @@ type Store = {
   requestAccess: () => Promise<SmsPermission>;
   chooseSource: (source: 'manual' | 'demo') => void;
   setCategory: (txn: Txn, category: CategoryId, applyToMerchant: boolean) => void;
+  /** Say what you pay this person for. Moves every payment to them; null clears it. */
+  setPurpose: (txn: Txn, purpose: PurposeId | null) => void;
   setExcluded: (txn: Txn, excluded: boolean) => void;
   addEntry: (input: NewEntry) => void;
   deleteManual: (id: string) => void;
@@ -116,6 +148,10 @@ type Store = {
   markBillPaid: (billId: string, paid: boolean) => void;
   /** "This category is right": stops the payment showing in Needs a look. */
   confirmCategory: (txn: Txn) => void;
+  /** Link two payments: the same money moved between your accounts, or a refund for a purchase. */
+  linkTxns: (a: Txn, b: Txn, kind: LinkKind) => void;
+  /** "These aren't related": removes a link, and Kharcha won't make it again. */
+  unlinkTxns: (a: Txn, b: Txn) => void;
   /** Deletes everything Kharcha saved and returns to the welcome screen. */
   eraseAll: () => Promise<void>;
   find: (id: string) => Txn | undefined;
@@ -132,9 +168,12 @@ function applyPrefs(auto: Txn[], prefs: Prefs): Txn[] {
   const fromSms = auto.map((t): Txn => {
     const override = prefs.overrides[t.id];
     const rule = prefs.rules[t.merchantKey];
+    const tag = prefs.purposes?.[t.merchantKey];
     let next = t;
     if (override && allowedFor(t, override)) next = { ...t, category: override, categorySource: 'manual' };
     else if (rule && allowedFor(t, rule)) next = { ...t, category: rule, categorySource: 'rule' };
+    // The tag only shows while the payment is still in the category it gave.
+    if (tag && isPurposeId(tag) && t.type === 'debit' && next.category === purpose(tag).category) next = { ...next, purpose: tag };
     return excluded.has(t.id) ? { ...next, excluded: true } : next;
   });
   const manual = prefs.manual.map((t) => (excluded.has(t.id) ? { ...t, excluded: true } : t));
@@ -181,6 +220,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [currencySetting, setCurrencySettingState] = useState<CurrencySetting>('auto');
+  const [monthStart, setMonthStartState] = useState(1);
   const locale = useMemo(() => deviceLocale(), []);
   // Sample data follows the phone's region: dollars in the US, rupees elsewhere.
   const [sample, setSampleState] = useState<SampleKind>(() => (currencyForLocale(locale) === 'USD' ? 'us' : 'india'));
@@ -233,6 +273,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Development builds only: lets a test inbox be re-read from the debugger (see scripts/scan-sms.ts).
+  useEffect(() => {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) devGlobals.__KHARCHA_RESCAN__ = scan;
+  }, [scan]);
+
   const startDemo = useCallback(() => {
     const d = demoState(sampleRef.current);
     setAutoTxns(d.txns);
@@ -252,8 +297,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       canSave.current = ok;
       setSaved(loaded);
       try {
-        const [[, cur], [, smp]] = await AsyncStorage.multiGet([CURRENCY_KEY, SAMPLE_KEY]);
+        const [[, cur], [, smp], [, start]] = await AsyncStorage.multiGet([CURRENCY_KEY, SAMPLE_KEY, MONTH_START_KEY]);
         if (cur === 'auto' || isCurrencyCode(cur)) setCurrencySettingState(cur);
+        if (start) {
+          const day = clampMonthStart(Number(start));
+          applyMonthStart(day);
+          setMonthStartState(day);
+          setMonth(thisMonth());
+        }
         if (smp && (SAMPLE_KINDS as string[]).includes(smp)) {
           sampleRef.current = smp as SampleKind;
           setSampleState(smp as SampleKind);
@@ -337,6 +388,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setStatus('ready');
     },
     [startDemo],
+  );
+
+  const setPurpose = useCallback(
+    (txn: Txn, next: PurposeId | null) => {
+      const key = txn.merchantKey;
+      if (!key) return;
+      update((x) => {
+        const purposes = { ...(x.purposes ?? {}) };
+        const rules = { ...x.rules };
+        const overrides = { ...x.overrides };
+        // A one-off change on this payment would hide the new tag, so drop it.
+        delete overrides[txn.id];
+        if (next === null) {
+          delete purposes[key];
+          delete rules[key];
+        } else {
+          purposes[key] = next;
+          rules[key] = purpose(next).category;
+        }
+        return { ...x, purposes, rules, overrides };
+      });
+    },
+    [update],
   );
 
   const setCategory = useCallback(
@@ -452,9 +526,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const linkTxns = useCallback(
+    (a: Txn, b: Txn, kind: LinkKind) => {
+      if (a.type === b.type) return;
+      const [out, inn] = a.type === 'debit' ? [a, b] : [b, a];
+      const key = pairKey(out.id, inn.id);
+      update((x) => ({
+        ...x,
+        links: [...(x.links ?? []).filter((l) => l.outId !== out.id && l.inId !== inn.id), { kind, outId: out.id, inId: inn.id }],
+        unlinked: (x.unlinked ?? []).filter((k) => k !== key),
+      }));
+    },
+    [update],
+  );
+
+  const unlinkTxns = useCallback(
+    (a: Txn, b: Txn) => {
+      const [out, inn] = a.type === 'debit' ? [a, b] : [b, a];
+      const key = pairKey(out.id, inn.id);
+      update((x) => ({
+        ...x,
+        links: (x.links ?? []).filter((l) => pairKey(l.outId, l.inId) !== key),
+        unlinked: [...new Set([...(x.unlinked ?? []), key])],
+      }));
+    },
+    [update],
+  );
+
   const eraseAll = useCallback(async () => {
-    await AsyncStorage.multiRemove([STORAGE_KEY, LEGACY_KEY, CURRENCY_KEY, SAMPLE_KEY]).catch(() => {});
+    await AsyncStorage.multiRemove([STORAGE_KEY, LEGACY_KEY, CURRENCY_KEY, SAMPLE_KEY, MONTH_START_KEY]).catch(() => {});
     setCurrencySettingState('auto');
+    applyMonthStart(1);
+    setMonthStartState(1);
     canSave.current = true;
     setDemo(null);
     setSaved(EMPTY_PREFS);
@@ -467,15 +570,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setStatus('onboarding');
   }, []);
 
-  const txns = useMemo(() => applyPrefs(autoTxns, prefs), [autoTxns, prefs]);
+  // Your corrections first, then how payments relate (transfers, refunds), then every total.
+  const txns = useMemo(
+    () => resolveFlows(applyPrefs(autoTxns, prefs), { links: prefs.links ?? [], unlinked: prefs.unlinked ?? [], ownNames: prefs.ownNames ?? [] }),
+    [autoTxns, prefs],
+  );
   const autoCurrency = useMemo(() => pickHomeCurrency('auto', txns, locale), [txns, locale]);
   const currency: CurrencyCode = currencySetting === 'auto' ? autoCurrency : currencySetting;
-  // Formatting and totals read this; set it before any screen renders.
+  // Formatting and totals read these; set them before any screen renders.
   setHomeCurrency(currency);
+  applyMonthStart(monthStart);
 
   const setCurrencySetting = useCallback((next: CurrencySetting) => {
     setCurrencySettingState(next);
     AsyncStorage.setItem(CURRENCY_KEY, next).catch(() => {});
+  }, []);
+
+  const setMonthStart = useCallback((day: number) => {
+    const next = clampMonthStart(day);
+    applyMonthStart(next);
+    setMonthStartState(next);
+    // Months change shape, so jump back to the one you are in now.
+    setMonth(thisMonth());
+    AsyncStorage.setItem(MONTH_START_KEY, String(next)).catch(() => {});
   }, []);
 
   const setSample = useCallback(
@@ -497,6 +614,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     currencySetting,
     autoCurrency,
     setCurrencySetting,
+    monthStart,
+    setMonthStart,
     sample,
     setSample,
     permission,
@@ -515,6 +634,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     requestAccess,
     chooseSource,
     setCategory,
+    setPurpose,
     setExcluded,
     addEntry,
     deleteManual,
@@ -524,6 +644,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setBudget,
     markBillPaid,
     confirmCategory,
+    linkTxns,
+    unlinkTxns,
     eraseAll,
     find,
   };

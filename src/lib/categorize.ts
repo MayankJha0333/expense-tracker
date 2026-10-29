@@ -1,4 +1,4 @@
-import { keyOf, type ParsedTxn } from './parser';
+import { CASH_DEPOSIT, keyOf, type ParsedTxn } from './parser';
 import type { CategoryId } from './types';
 
 /*
@@ -9,6 +9,14 @@ import type { CategoryId } from './types';
 /** Checked in this order, so "Swiggy Instamart" becomes Groceries before Food. */
 const KEYWORDS: [CategoryId, string[]][] = [
   ['card_bill', ['cred club', 'credclub', 'cred', 'card services', 'amex epayment']],
+  // Before shopping and entertainment, so "Amazon Web Services" and "Google Cloud" land here.
+  ['software', [
+    'hostinger', 'godaddy', 'namecheap', 'digitalocean', 'google cloud', 'googlecloud', 'google ads', 'googleads',
+    'google workspace', 'gsuite', 'amazon web services', 'aws', 'vercel', 'netlify', 'github', 'gitlab', 'openai',
+    'chatgpt', 'anthropic', 'claude.ai', 'figma', 'canva', 'notion', 'adobe', 'microsoft', 'zoho', 'hetzner',
+    'cloudflare', 'heroku', 'linode', 'bluehost', 'hostgator', 'squarespace', 'wix', 'webflow', 'framer',
+    'elevenlabs', 'jetbrains', 'atlassian', 'slack', 'zoom.us', 'dropbox', 'apple icloud', 'icloud', 'meta ads', 'facebook ads',
+  ]],
   ['groceries', [
     'blinkit', 'zepto', 'instamart', 'bigbasket', 'bbnow', 'dmart', 'avenue supermarts', 'jiomart',
     'grofers', 'reliance fresh', 'smart bazaar', 'smartbazaar', 'naturesbasket', 'spencer', 'milkbasket',
@@ -20,6 +28,8 @@ const KEYWORDS: [CategoryId, string[]][] = [
     'swiggy', 'zomato', 'dominos', 'domino', 'pizza', 'mcdonald', 'kfc', 'burger', 'starbucks', 'cafe',
     'coffee', 'restaurant', 'chai', 'bakery', 'sweets', 'haldiram', 'biryani', 'dunkin', 'subway',
     'eatsure', 'faasos', 'behrouz', 'box8', 'barbeque', 'food', 'kitchen', 'dhaba', 'eatclub', 'chaayos',
+    'dosa', 'idli', 'paranthe', 'paratha', 'samosa', 'snacks', 'tiffin', 'tiffins', 'chaat', 'aahar', 'bhojan',
+    'swish', 'soda', 'condiments', 'tea stall',
     'third wave', 'blue tokai', 'theobroma', 'wow momo', 'momo', 'canteen', 'juice', 'chipotle', 'doordash',
     'uber eats', 'ubereats', 'grubhub', 'sweetgreen', 'panera', 'taco bell', 'wendys', 'shake shack',
   ]],
@@ -53,7 +63,7 @@ const KEYWORDS: [CategoryId, string[]][] = [
     'tuition', 'vedantu', 'upgrad', 'simplilearn', 'physicswallah', 'books',
   ]],
   ['investments', [
-    'zerodha', 'groww', 'upstox', 'kuvera', 'mutual fund', 'mutualfund', 'sip', 'nps', 'ppf',
+    'indian clearing', 'zerodha', 'groww', 'upstox', 'kuvera', 'mutual fund', 'mutualfund', 'sip', 'nps', 'ppf',
     'indmoney', 'smallcase', 'angel one', 'angelone', 'paytm money', 'kite', 'iccl', 'nsdl', 'cdsl',
     'vanguard', 'fidelity', 'schwab', 'robinhood', 'betterment', 'wealthfront',
   ]],
@@ -63,20 +73,20 @@ const KEYWORDS: [CategoryId, string[]][] = [
   ]],
   ['home', [
     'rent', 'nobroker', 'housing.com', 'maintenance', 'society', 'urban company', 'urbanclap',
-    'furlenco', 'rentomojo', 'nestaway', 'mygate', 'electrician', 'plumber', 'apartments', 'property management',
+    'furlenco', 'furlen', 'rentomojo', 'nestaway', 'mygate', 'electrician', 'plumber', 'apartments', 'property management',
   ]],
   ['bills', [
     'electricity', 'bescom', 'msedcl', 'mahadiscom', 'tata power', 'tatapower', 'adani electricity',
     'bses', 'tneb', 'kseb', 'torrent power', 'mahanagar gas', 'indraprastha gas', 'indane',
     'bharat gas', 'hp gas', 'broadband', 'act fibernet', 'fibernet', 'jio', 'airtel', 'vodafone',
     'bsnl', 'recharge', 'tata play', 'tataplay', 'sun direct', 'postpaid', 'prepaid', 'billdesk',
-    'bbps', 'insurance', 'lic', 'policybazaar', 'acko', 'con edison', 'coned', 'pg&e', 'verizon', 't-mobile',
+    'gpay utility', 'utility', 'bbps', 'insurance', 'lic', 'policybazaar', 'acko', 'con edison', 'coned', 'pg&e', 'verizon', 't-mobile',
     'tmobile', 'at&t', 'comcast', 'xfinity', 'spectrum', 'geico', 'state farm',
   ]],
   ['shopping', [
     'amazon', 'amzn', 'flipkart', 'myntra', 'ajio', 'meesho', 'nykaa', 'tatacliq', 'tata cliq', 'croma',
     'reliance digital', 'vijay sales', 'decathlon', 'ikea', 'lenskart', 'firstcry', 'snapdeal',
-    'shoppers stop', 'lifestyle', 'westside', 'zara', 'uniqlo', 'pantaloons', 'max fashion', 'trends',
+    'footwear', 'luggage', 'shoppers stop', 'lifestyle', 'westside', 'zara', 'uniqlo', 'pantaloons', 'max fashion', 'trends',
     'boat', 'mall', 'store', 'mart', 'shop', 'fashion', 'target', 'walmart', 'best buy', 'bestbuy', 'macys',
     'nordstrom', 'home depot', 'etsy', 'ebay',
   ]],
@@ -97,13 +107,16 @@ const MATCHERS: Matcher[] = KEYWORDS.map(([category, words]) => {
   return { category, long, short };
 });
 
-const CARD_BILL = /(credit ?card|card ?bill|cc bill).{0,60}?(payment|bill|towards|received)|(payment|bill|towards).{0,60}?(credit ?card)/i;
+const CARD_BILL =
+  /(credit ?card|card ?bill|cc bill).{0,60}?(payment|bill|towards|received)|(payment|bill|towards).{0,60}?(credit ?card)|\bcardmember\b.{0,40}?\bpayment\b|\bpayment\b.{0,80}?\bcredited to your card\b/i;
 const CARD_SPEND = /\b(spent|purchase|for using|used at|txn at)\b/i;
 const SALARY = /\b(salary|sal cr|payroll)\b/i;
 const REFUND = /\b(refund|refunded|reversal|reversed|cashback|cash back)\b/i;
 const INTEREST = /\b(interest|int\.? ?pd|int credit)\b/i;
 const P2A = /\bp2a\b/i;
 const P2P_APP = /\b(zelle|venmo|cash ?app)\b/i;
+/** Autopay set up with a company (UPI mandate, NACH, e-mandate). People are almost never paid this way. */
+const MANDATE = /\b(?:upi\s+mandate|e-?mandate|mandate|autopay|auto-?debit|standing instruction)\b/i;
 
 const BODY_HINTS: [RegExp, CategoryId][] = [
   [/\bfastag\b/i, 'transport'],
@@ -133,19 +146,31 @@ const BUSINESS_WORD = new Set([
   'medicals', 'pharma', 'pharmacy', 'chemist', 'hospital', 'clinic', 'retail', 'india', 'centre', 'center', 'shop', 'bazaar',
   'bazar', 'collections', 'motors', 'electronics', 'mobiles', 'garments', 'textiles', 'sweets', 'bakery', 'kirana', 'general',
   'provisions', 'automobiles', 'station', 'petroleum', 'fuels', 'jewellers', 'opticals', 'salon', 'studio', 'academy', 'school',
+  // Company endings from other countries, and words shops and apps use but names don't.
+  'pte', 'pty', 'llc', 'plc', 'gmbh', 'corporation', 'ads', 'cloud', 'digital', 'online', 'media', 'labs', 'hosting', 'software',
+  'web', 'apps', 'network', 'networks', 'systems', 'global', 'international', 'ventures', 'point', 'market', 'grand', 'fresh',
+  'snacks', 'dosa', 'paranthe', 'paratha', 'samosa', 'aahar', 'soda', 'condiments', 'clearing', 'gpay', 'paytm', 'payu', 'street',
+  'tiffin', 'tiffins', 'mess', 'chaat', 'juice', 'dhaba', 'hotels', 'bhavan', 'bhawan', 'corner', 'kitchen', 'tasty', 'problem',
+  'utility', 'footwear', 'luggage', 'foundation', 'and', 'trust',
 ]);
 
 function looksLikePersonName(name: string): boolean {
   const words = name.trim().split(' ').filter(Boolean);
-  if (words.length < 2 || words.length > 3) return false;
+  if (words.length < 2 || words.length > 4) return false;
   if (words.some((w) => BUSINESS_WORD.has(w.toLowerCase()))) return false;
-  return words.every((w) => w.length >= 2 && w.length <= 14 && /^[A-Za-z]+$/.test(w));
+  if (!words.every((w) => /^[A-Za-z]{1,14}$/.test(w))) return false;
+  // Indian UPI names often carry initials ("S Meena", "Sharath K R"). Allow up to two,
+  // as long as at least one real name of 3+ letters is there.
+  const initials = words.filter((w) => w.length === 1).length;
+  const realNames = words.filter((w) => w.length >= 3).length;
+  return initials <= 2 && realNames >= 1 && words.length - initials <= 3;
 }
 
 export function categorize(p: ParsedTxn, body: string): CategoryId {
   const text = body.replace(/\s+/g, ' ');
   if (p.type === 'credit') {
     if (CARD_BILL.test(text)) return 'card_bill';
+    if (CASH_DEPOSIT.test(text)) return 'self_transfer';
     if (SALARY.test(text)) return 'salary';
     if (REFUND.test(text)) return 'refund';
     if (INTEREST.test(text)) return 'interest';
@@ -161,6 +186,7 @@ export function categorize(p: ParsedTxn, body: string): CategoryId {
 
   if (P2A.test(text) || p.personLike) return 'people';
   // Zelle / Venmo / Cash App to a person's name (US).
+  if (MANDATE.test(text)) return 'other';
   if (P2P_APP.test(text) && looksLikePersonName(p.merchant)) return 'people';
   if (p.mode === 'upi' && looksLikePersonName(p.merchant)) return 'people';
   return 'other';

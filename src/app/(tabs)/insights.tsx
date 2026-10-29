@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTabBarSpace } from '../../components/tabBarSpace';
@@ -340,6 +340,7 @@ function Income({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] })
                   fill={c.amount / maxIncomeCat}
                   color={p.income}
                   sub={`${c.count} ${c.count === 1 ? 'payment' : 'payments'}`}
+                  onPress={() => router.push(`/category/${c.category}?month=${monthKey(month)}`)}
                 />
               ))}
             </Card>
@@ -390,7 +391,14 @@ function Income({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] })
                 return (
                   <View key={s.key}>
                     {i > 0 ? <Divider inset={48} /> : null}
-                    <View style={[styles.line, { alignItems: 'flex-start' }]}>
+                    <Pressable
+                      onPress={() =>
+                        router.push(`/category/${s.category}?month=${monthKey(month)}&from=${encodeURIComponent(s.key)}`)
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`${s.name}, received ${money(s.amount)}${s.count > 1 ? `, ${s.count} payments` : ''}. Opens the payments.`}
+                      style={({ pressed }) => [styles.line, { alignItems: 'flex-start', opacity: pressed ? 0.6 : 1 }]}
+                    >
                       <Badge icon={c.icon} color={c.color} size={36} />
                       <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
                         <View style={styles.between}>
@@ -406,7 +414,7 @@ function Income({ summary, flow }: { summary: MonthSummary; flow: FlowMonth[] })
                           {c.label} · {percent(s.share)} of income{s.count > 1 ? ` · ${s.count} payments` : ''}
                         </Txt>
                       </View>
-                    </View>
+                    </Pressable>
                   </View>
                 );
               })}

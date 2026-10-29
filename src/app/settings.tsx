@@ -10,6 +10,7 @@ import { useAskForSms } from '../components/SmsConsent';
 import { SmsNotice } from '../components/SmsNotice';
 import { Button, Card, Chip, Divider, Icon, ListRow, SectionHeader, Segmented, Tag, Txt } from '../components/ui';
 import { PressScale, Stagger } from '../components/motion';
+import { MONTH_START_MAX, monthRange, thisMonth } from '../lib/analytics';
 import { CURRENCIES, CURRENCY_CODES } from '../lib/currency';
 import { SAMPLE_DATA_ENABLED, type SampleKind } from '../lib/demo';
 import { DESIGN_SYSTEM_ENABLED } from '../lib/devTools';
@@ -78,6 +79,8 @@ export default function Settings() {
       <Appearance />
 
       <CurrencySection />
+
+      <MonthStartSection />
 
       <View style={[styles.hero, { backgroundColor: p.card }]}>
         <View style={styles.heroHead}>
@@ -238,6 +241,63 @@ const checkIn = ZoomIn.springify().damping(12).stiffness(280).reduceMotion(Reduc
 const SAMPLE_LABEL: Record<SampleKind, string> = { india: 'India (₹)', us: 'US ($)', stress: 'Stress test' };
 
 /** Which currency totals use. Auto follows your payments; other currencies are listed but never added up. */
+const ordinal = (n: number) => {
+  const tail = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th';
+  return `${n}${tail}`;
+};
+
+/** Pick the day your month starts on, e.g. the day your salary comes in. */
+function MonthStartSection() {
+  const p = usePalette();
+  const { monthStart, setMonthStart } = useStore();
+  const days = Array.from({ length: MONTH_START_MAX }, (_, i) => i + 1);
+  const weeks: number[][] = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  const pick = (day: number) => {
+    if (day === monthStart) return;
+    Haptics.selectionAsync().catch(() => {});
+    setMonthStart(day);
+  };
+  return (
+    <View>
+      <SectionHeader
+        title="Your month"
+        subtitle={monthStart === 1 ? 'Starts on the 1st, like the calendar' : `Starts on the ${ordinal(monthStart)} · this month is ${monthRange(thisMonth())}`}
+      />
+      <Card style={{ gap: space.md }}>
+        <Txt variant="smallStrong">Month starts on</Txt>
+        <View style={{ gap: 6 }} accessibilityRole="radiogroup">
+          {weeks.map((week, wi) => (
+            <View key={wi} style={styles.dayRow}>
+              {week.map((day) => {
+                const on = day === monthStart;
+                return (
+                  <PressScale
+                    key={day}
+                    onPress={() => pick(day)}
+                    scaleTo={0.9}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`Start on the ${ordinal(day)}`}
+                    accessibilityState={{ selected: on, checked: on }}
+                    style={[styles.dayCell, { backgroundColor: on ? p.accent : p.surface, borderColor: on ? p.accent : p.line }]}
+                  >
+                    <Txt variant="smallStrong" color={on ? p.onAccent : p.ink}>
+                      {day}
+                    </Txt>
+                  </PressScale>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+        <Txt variant="small" color={p.muted}>
+          Pick the day your month really begins, like the day your salary comes in. Totals, budgets and the calendar then run from that day to the day before it next month. Each month is named after the month it starts in. Days after the 28th are not offered because some months are shorter.
+        </Txt>
+      </Card>
+    </View>
+  );
+}
+
 function CurrencySection() {
   const p = usePalette();
   const { currency, currencySetting, autoCurrency, setCurrencySetting, source, sample, setSample } = useStore();
@@ -371,6 +431,8 @@ function Count({ value, label }: { value: number; label: string }) {
 
 const styles = StyleSheet.create({
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  dayRow: { flexDirection: 'row', gap: 6 },
+  dayCell: { flex: 1, height: 40, borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
   hero: { borderRadius: radius.lg, padding: space.xl },
   heroHead: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   shield: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },

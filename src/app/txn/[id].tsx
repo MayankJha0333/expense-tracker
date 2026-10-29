@@ -5,14 +5,17 @@ import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { flowLabel, TxnRow } from '../../components/finance';
 import { Badge, Button, Chip, Empty, NoticeRow, Txt } from '../../components/ui';
 import { Stagger } from '../../components/motion';
+import { PurposePicker } from '../../components/PurposePicker';
 import { needsReview, payLabel } from '../../lib/accounts';
 import { dayLabel, timeLabel } from '../../lib/analytics';
 import { CURRENCIES, currencyOf, getHomeCurrency } from '../../lib/currency';
 import { money } from '../../lib/money';
+import { canHavePurpose, kindLabel } from '../../lib/purposes';
 import { useStore } from '../../lib/store';
-import { cat, CREDIT_CATEGORIES, DEBIT_CATEGORIES, isForeign, PAY_MODE_LABEL, type CategoryId } from '../../lib/types';
+import { cat, CREDIT_CATEGORIES, DEBIT_CATEGORIES, isForeign, PAY_MODE_LABEL, shownAmount, type CategoryId, type Txn } from '../../lib/types';
 import { radius, space, usePalette } from '../../theme';
 
 const SOURCE_TEXT = {
@@ -25,7 +28,7 @@ export default function TxnDetail() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { find, setCategory, setExcluded, deleteManual, confirmCategory, txns } = useStore();
+  const { find, setCategory, setExcluded, deleteManual, confirmCategory, txns, unlinkTxns } = useStore();
   const txn = id ? find(id) : undefined;
   const [applyToAll, setApplyToAll] = useState(true);
 
@@ -83,12 +86,18 @@ export default function TxnDetail() {
         </Txt>
         <Txt variant="display" color={credit ? p.income : p.ink} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{ alignSelf: 'stretch', textAlign: 'center' }}>
           {credit ? '+' : ''}
-          {money(txn.amount, { currency: code, decimals: true })}
+          {money(shownAmount(txn), { currency: code, decimals: true })}
         </Txt>
         <Txt variant="small" color={p.muted}>
-          {credit ? 'Money in' : c.isSaving ? 'Saved' : 'Money out'} · {c.label}
+          {credit ? 'Money in' : c.isSaving ? 'Saved' : 'Money out'} · {flowLabel(txn) ?? kindLabel(txn, c.label)}
         </Txt>
+        {txn.grossAmount !== undefined && !txn.netted ? (
+          <Txt variant="smallStrong" color={p.income}>
+            {money(txn.grossAmount - txn.amount, { currency: code })} came back · you spent {money(txn.amount, { currency: code })}
+          </Txt>
+        ) : null}
       </View>
+      <Linked txn={txn} others={(txn.links ?? []).map((l) => find(l.otherId)).filter((o): o is Txn => !!o)} onUnlink={(o) => unlinkTxns(txn, o)} />
 
       {foreign ? (
         <NoticeRow
@@ -136,6 +145,19 @@ export default function TxnDetail() {
           </View>
         ))}
       </View>
+
+      {canHavePurpose(txn) ? (
+        <View style={{ gap: space.md }}>
+          <Txt variant="heading">What do you pay {txn.merchant} for?</Txt>
+          <Txt variant="small" color={p.muted}>
+            {sameShop > 0
+              ? `Pick once. This and the other ${sameShop} ${sameShop === 1 ? 'payment' : 'payments'} to them move to the right place, and new ones too.`
+              : 'Pick once. Future payments to them go to the right place too.'}
+          </Txt>
+          <PurposePicker txn={txn} />
+          <Button label="Sort everyone you pay" icon="account-multiple-check-outline" kind="quiet" compact onPress={() => router.push('/people')} />
+        </View>
+      ) : null}
 
       <View style={{ gap: space.md }}>
         <Txt variant="heading">Category</Txt>
@@ -212,7 +234,55 @@ export default function TxnDetail() {
   );
 }
 
+/** The payments this one is linked to, why, and a way to undo it or link one by hand. */
+function Linked({ txn, others, onUnlink }: { txn: Txn; others: Txn[]; onUnlink: (other: Txn) => void }) {
+  const p = usePalette();
+  const credit = txn.type === 'credit';
+  const link = txn.links?.[0];
+  if (!link || others.length === 0) {
+    if (txn.isManual) return null;
+    return (
+      <View style={{ gap: space.sm }}>
+        <Txt variant="small" color={p.muted}>
+          {credit
+            ? 'Is this money from your own account, or a refund? Link it to the other payment so it isn\'t counted as income.'
+            : 'Moved this to your own account, or got a refund for it? Link the other payment so your totals stay right.'}
+        </Txt>
+        <Button label="Link to another payment" icon="link-variant" kind="secondary" compact onPress={() => router.push(`/link/${txn.id}`)} />
+      </View>
+    );
+  }
+  const transfer = link.kind === 'transfer';
+  const title = transfer ? (txn.category === 'card_bill' ? 'Card bill, both sides' : 'Same money, your accounts') : credit ? 'Refund for' : 'Money back';
+  const body = transfer
+    ? txn.category === 'card_bill'
+      ? 'Paying your own card bill is not new spending: what you bought on the card already counted.'
+      : credit
+        ? 'This came from your own account, so it is not counted as income.'
+        : 'This went to your own account, so it is not counted as spending.'
+    : credit
+      ? 'Taken off the purchase below, so it is not counted as income.'
+      : txn.netted
+        ? 'You got all of it back, so this purchase is not counted as spending.'
+        : `Only what you kept, ${money(txn.amount)}, counts as spending.`;
+  return (
+    <View style={{ gap: space.sm }}>
+      <Txt variant="heading">{title}</Txt>
+      <Txt variant="small" color={p.muted}>
+        {body} {link.source === 'auto' ? 'Kharcha linked these on its own.' : 'You linked these.'}
+      </Txt>
+      {others.map((o) => (
+        <View key={o.id} style={[styles.linkCard, { backgroundColor: p.surface, borderColor: p.line }]}>
+          <TxnRow txn={o} showDate />
+          <Button label="Not related, unlink" icon="link-variant-off" kind="quiet" compact onPress={() => onUnlink(o)} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  linkCard: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.md, paddingBottom: space.xs },
   table: { borderTopWidth: StyleSheet.hairlineWidth },
   tableRow: {
     flexDirection: 'row',

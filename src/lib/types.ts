@@ -32,6 +32,9 @@ export type CategoryId =
   | 'health'
   | 'education'
   | 'home'
+  | 'house_help'
+  | 'family'
+  | 'software'
   | 'investments'
   | 'emi'
   | 'cash'
@@ -88,6 +91,9 @@ export const CATEGORIES: CategoryInfo[] = [
   c('health', 'Health & fitness', '#4CB38A', 'heart-pulse'),
   c('education', 'Education', '#D9A62E', 'school-outline'),
   c('home', 'Rent & home', '#9B7B5B', 'home-outline'),
+  c('house_help', 'Cook & house help', '#C9824A', 'chef-hat'),
+  c('family', 'Family', '#D46F8C', 'account-heart-outline'),
+  c('software', 'Software & online', '#5B7FD6', 'cloud-outline'),
   c('investments', 'Investments & SIPs', '#2F7C9E', 'chart-line', 'saving'),
   c('emi', 'EMI & loans', '#8E5A9E', 'bank-outline'),
   c('cash', 'Cash', '#7D8A93', 'cash'),
@@ -135,12 +141,43 @@ export type Txn = {
   note?: string;
   /** Currency read from the SMS (or picked when added by hand). Missing = the home currency. */
   currency?: CurrencyCode;
+  /** How this payment relates to others (see lib/flows.ts). Set after your corrections are applied. */
+  links?: TxnLink[];
+  /** The amount in the message, when a refund brought part of it back. `amount` is then what you really spent. */
+  grossAmount?: number;
+  /** Already counted somewhere else: a refund taken off its purchase, or a purchase refunded in full. */
+  netted?: boolean;
+  /** What you told us this person is paid for ("Cook", "Room rent"). See lib/purposes.ts. */
+  purpose?: PurposeId;
 };
 
+/** What a payment to a person is for. Picking one moves every payment to them into its category. */
+export type PurposeId = 'rent' | 'cook' | 'maid' | 'driver' | 'milk' | 'family' | 'friend' | 'own' | 'other';
+
+/**
+ * - transfer: the same money moved between your own accounts (or paid your own card bill).
+ * - refund: money that came back for an earlier purchase.
+ */
+export type LinkKind = 'transfer' | 'refund';
+
+export type TxnLink = {
+  kind: LinkKind;
+  /** The payment on the other side. */
+  otherId: string;
+  /** auto = Kharcha found it; user = you linked it. */
+  source: 'auto' | 'user';
+  /** How much of this payment the link covers (a refund can be part of a purchase). */
+  amount: number;
+};
+
+/** What you see for a payment: the full amount in the message, even after a refund is taken off. */
+export const shownAmount = (t: Txn) => t.grossAmount ?? t.amount;
+
 // Totals only add up payments in the home currency (no exchange rates offline).
-export const countsAsSpend = (t: Txn) => t.type === 'debit' && cat(t.category).countsAsSpend && !t.excluded && inHome(t);
-export const countsAsIncome = (t: Txn) => t.type === 'credit' && cat(t.category).isIncome && !t.excluded && inHome(t);
-export const countsAsSaving = (t: Txn) => t.type === 'debit' && cat(t.category).isSaving && !t.excluded && inHome(t);
+// A netted payment is already counted through the payment it is linked to (see lib/flows.ts).
+export const countsAsSpend = (t: Txn) => t.type === 'debit' && cat(t.category).countsAsSpend && !t.excluded && !t.netted && inHome(t);
+export const countsAsIncome = (t: Txn) => t.type === 'credit' && cat(t.category).isIncome && !t.excluded && !t.netted && inHome(t);
+export const countsAsSaving = (t: Txn) => t.type === 'debit' && cat(t.category).isSaving && !t.excluded && !t.netted && inHome(t);
 /** A payment in another currency: shown in lists, left out of totals. */
 export const isForeign = (t: Txn) => !inHome(t);
 

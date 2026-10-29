@@ -38,7 +38,8 @@
     ],
     "scheme": "kharcha",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mayankjha.kharcha"
     },
     "extra": {
       "router": {

@@ -13,7 +13,7 @@ import { Ring } from '../../components/charts';
 import { HeroCard } from '../../components/HeroCard';
 import { AmountBar, Button, Card, Empty, Icon, IconButton, MixBar, NoticeRow, SectionHeader, Txt } from '../../components/ui';
 import { cardDues, duesSummary, needsReview, PAY_GROUP_LABEL, payGroupColorIndex, payMix, shortCardName } from '../../lib/accounts';
-import { budgetPace, shortDay, monthKey, monthName, monthShort, sameMonth, summarize, thisMonth } from '../../lib/analytics';
+import { budgetPace, shortDay, monthKey, monthName, monthShort, monthTitle, sameMonth, summarize, thisMonth } from '../../lib/analytics';
 import { currencyOf, type CurrencyCode } from '../../lib/currency';
 import { currencySymbol, formatCount, money, percent } from '../../lib/money';
 import { useStore } from '../../lib/store';
@@ -93,7 +93,7 @@ export default function Home() {
           accessibilityLabel={`${isCurrent ? `${name} so far` : monthName(month)}: money in ${money(summary.received)}, spent ${money(summary.spent)}, ${overspent ? 'overspent' : 'saved'} ${money(Math.abs(summary.saved))}. Opens insights.`}
         >
           <Txt variant="smallStrong" color={p.heroText}>
-            {overspent ? 'Overspent in' : 'Saved in'} {monthName(month).split(' ')[0]}
+            {overspent ? 'Overspent in' : 'Saved in'} {monthTitle(month)}
             {isCurrent ? ' so far' : ` ${month.year}`}
           </Txt>
           <AnimatedAmount
@@ -107,7 +107,8 @@ export default function Home() {
             minimumFontScale={0.6}
             style={styles.heroAmount}
           />
-          {summary.received > 0 ? (
+          {/* Under ₹1 in, or 100x more out than in, a percentage says nothing useful. */}
+          {summary.received >= 1 && spentShare < 100 ? (
             <View style={[styles.heroChip, { backgroundColor: p.heroChip }]}>
               <Icon name={overspent ? 'trending-down' : 'trending-up'} size={14} color={p.heroChipText} />
               <Txt variant="smallStrong" color={p.heroChipText}>
@@ -116,7 +117,7 @@ export default function Home() {
             </View>
           ) : (
             <Txt variant="small" color={p.heroMuted}>
-              No income found for {name} yet. Salary and other money in will show here.
+              {isCurrent ? 'No income found this month yet.' : `No income found in ${monthTitle(month)}.`} Salary and other money in will show here.
             </Txt>
           )}
           <View style={styles.heroTiles}>

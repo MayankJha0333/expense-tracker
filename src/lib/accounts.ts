@@ -277,18 +277,20 @@ export function duesSummary(dues: CardDue[]): { total: number; open: CardDue[]; 
  * income or may be someone paying you back. Picking a category clears them.
  */
 export function needsReview(t: Txn): boolean {
-  if (t.excluded || t.categorySource !== 'auto') return false;
+  // Linked to another payment (a transfer or refund): Kharcha already knows what it is.
+  if (t.excluded || t.categorySource !== 'auto' || (t.links?.length ?? 0) > 0) return false;
   if (t.type === 'debit') return t.category === 'other';
   return t.category === 'received';
 }
 
 /* ---------- money in that is not income ---------- */
 
-export type NotCountedReason = 'self_transfer' | 'card_bill' | 'excluded' | 'other';
+export type NotCountedReason = 'self_transfer' | 'card_bill' | 'refund_linked' | 'excluded' | 'other';
 
 export const NOT_COUNTED_LABEL: Record<NotCountedReason, string> = {
   self_transfer: 'Moved between your own accounts',
   card_bill: 'Credit card bill payments',
+  refund_linked: 'Refunds taken off what you bought',
   excluded: 'Left out by you',
   other: 'Other money in',
 };
@@ -303,7 +305,9 @@ export function notCountedIncome(txns: Txn[]): { total: number; rows: NotCounted
     if (t.type !== 'credit' || countsAsIncome(t) || !inHome(t)) continue;
     const reason: NotCountedReason = t.excluded
       ? 'excluded'
-      : t.category === 'self_transfer'
+      : t.netted
+        ? 'refund_linked'
+        : t.category === 'self_transfer'
         ? 'self_transfer'
         : t.category === 'card_bill'
           ? 'card_bill'
