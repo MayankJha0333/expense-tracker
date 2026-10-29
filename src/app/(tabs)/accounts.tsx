@@ -122,7 +122,12 @@ export default function Accounts() {
       </View>
 
       <View>
-        <SectionHeader title="Credit cards" subtitle={toPay > 0 ? `${money(toPay)} to pay` : creditCards.length ? 'All bills paid' : undefined} />
+        <SectionHeader
+          title="Credit cards"
+          subtitle={toPay > 0 ? `${money(toPay)} to pay` : creditCards.length ? 'All bills paid' : undefined}
+          action={creditCards.length ? 'Overview' : undefined}
+          onAction={() => router.push('/cards')}
+        />
         {creditCards.length === 0 ? (
           <Card>
             <Txt variant="small" color={p.muted}>

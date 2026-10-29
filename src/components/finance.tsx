@@ -19,7 +19,7 @@ const shortDate = (ts: number) => shortDay(ts);
 export function billLine(due: CardDue, p: Palette): { text: string; color: string; bg: string } {
   const dateText = due.bill.dueDate ? shortDate(due.bill.dueDate) : null;
   if (due.status === 'paid') {
-    return { text: `Bill of ${money(due.bill.amountDue)} paid`, color: p.income, bg: p.incomeSoft };
+    return { text: `Bill of ${money(due.bill.amountDue)} paid${due.paidOn ? ` on ${shortDay(due.paidOn)}` : ''}`, color: p.income, bg: p.incomeSoft };
   }
   if (due.status === 'overdue') {
     const late = due.daysLeft !== null ? -due.daysLeft : 0;

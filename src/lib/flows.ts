@@ -1,4 +1,4 @@
-import { instrumentKey } from './accounts';
+import { instrumentKey, isCardTxn } from './accounts';
 import { keyOf } from './parser';
 import { cat, type CategoryId, type LinkKind, type Txn, type TxnLink } from './types';
 
@@ -123,6 +123,13 @@ const IN_CAN_MOVE = new Set<CategoryId>(['received', 'self_transfer', 'card_bill
 const REFUND_WORDS = /\b(refund|refunded|reversal|reversed|returned|chargeback)\b/i;
 const CASHBACK_ONLY = /\bcash ?back\b/i;
 const sameCents = (a: number, b: number) => Math.abs(a - b) < CENT;
+/**
+ * A card bill paid through an app (CRED, PhonePe) can differ by a few rupees between the
+ * bank debit and the card credit (₹49,238 left the bank, ₹49,243 reached the card).
+ */
+const sameMoney = (out: Txn, inn: Txn) =>
+  sameCents(out.amount, inn.amount) ||
+  (out.category === 'card_bill' && inn.category === 'card_bill' && Math.abs(out.amount - inn.amount) <= Math.max(10, out.amount * 0.002));
 // A card bill is paid from a bank account to a card: different places by nature.
 const differentPlace = (a: Txn, b: Txn) => instrumentKey(a) !== instrumentKey(b);
 
@@ -198,8 +205,8 @@ export function resolveFlows(txns: Txn[], prefs: FlowPrefs = EMPTY_FLOW_PREFS): 
       const gap = inn.timestamp - out.timestamp;
       if (gap > TRANSFER_WINDOW) continue;
       if (gap < -EARLY_SLACK) break;
-      if (isLinked(out) || !OUT_CAN_MOVE.has(out.category) || userPicked(out) || out.mode === 'card') continue;
-      if (!sameCents(out.amount, inn.amount) || !differentPlace(out, inn)) continue;
+      if (isLinked(out) || !OUT_CAN_MOVE.has(out.category) || userPicked(out) || isCardTxn(out)) continue;
+      if (!sameMoney(out, inn) || !differentPlace(out, inn)) continue;
       if (blocked.has(pairKey(out.id, inn.id)) || !transferReason(out, inn, me)) continue;
       pairs.push({ out, inn, gap: Math.abs(gap) });
     }
@@ -226,7 +233,8 @@ export function resolveFlows(txns: Txn[], prefs: FlowPrefs = EMPTY_FLOW_PREFS): 
       if (!cat(out.category).countsAsSpend && !cat(out.category).isSaving) continue;
       if (refundable(out) + CENT < inn.amount || blocked.has(pairKey(out.id, inn.id))) continue;
       const shop = out.merchantKey === inn.merchantKey || (inn.merchantKey.length >= 4 && out.merchantKey.includes(inn.merchantKey));
-      const sameAccount = !!out.account && out.account === inn.account;
+      // "Reversed in your HDFC Bank Credit Card" names the bank but not the card number.
+      const sameAccount = (!!out.account && out.account === inn.account) || (reversal && !inn.account && !!inn.bank && inn.bank === out.bank);
       const exact = sameCents(refundable(out), inn.amount);
       // A reversal names no shop, so it needs the same account, the exact amount and only a few days.
       const reversed = reversal && sameAccount && exact && gap <= REVERSAL_WINDOW;
@@ -243,7 +251,7 @@ export function resolveFlows(txns: Txn[], prefs: FlowPrefs = EMPTY_FLOW_PREFS): 
 
   // 4. No pair found, but clearly you: paying yourself or topping up your own account.
   for (const t of list) {
-    if (isLinked(t) || t.categorySource !== 'auto' || t.mode === 'card') continue;
+    if (isLinked(t) || t.categorySource !== 'auto' || isCardTxn(t)) continue;
     const own = isOwnName(t.merchant, me) || (t.type === 'debit' && isOwnBank(t.merchant, me));
     if (own && (t.type === 'debit' ? OUT_CAN_MOVE : IN_CAN_MOVE).has(t.category)) t.category = 'self_transfer';
   }

@@ -55,6 +55,8 @@ type Prefs = {
   budget: number | null;
   /** Credit card statements you marked as paid (bill ids). */
   paidBills: string[];
+  /** Card bill payments you looked at and said are fine (Credit cards › Payments to check). */
+  checkedCardPayments: string[];
   /** Links between payments you made by hand (see lib/flows.ts). */
   links: FlowPrefs['links'];
   /** Links Kharcha found that you removed. */
@@ -74,6 +76,7 @@ const EMPTY_PREFS: Prefs = {
   goals: [],
   budget: null,
   paidBills: [],
+  checkedCardPayments: [],
   links: [],
   unlinked: [],
   ownNames: [],
@@ -131,6 +134,9 @@ type Store = {
   /** Credit card statements read from SMS, newest first. */
   bills: CardBill[];
   paidBills: string[];
+  checkedCardPayments: string[];
+  /** "Yes, this card payment is right": stops asking about it. */
+  checkCardPayment: (txnId: string) => void;
   setMonth: (m: Month) => void;
   refresh: () => Promise<void>;
   requestAccess: () => Promise<SmsPermission>;
@@ -507,6 +513,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const checkCardPayment = useCallback(
+    (txnId: string) => update((x) => ({ ...x, checkedCardPayments: [...new Set([...(x.checkedCardPayments ?? []), txnId])] })),
+    [update],
+  );
+
   const markBillPaid = useCallback(
     (billId: string, paid: boolean) => {
       update((x) => {
@@ -630,6 +641,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     budget: prefs.budget,
     bills,
     paidBills: prefs.paidBills ?? [],
+    checkedCardPayments: prefs.checkedCardPayments ?? [],
+    checkCardPayment,
     setMonth,
     refresh,
     requestAccess,

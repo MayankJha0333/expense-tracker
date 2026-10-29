@@ -65,10 +65,21 @@ export type InstrumentKind = 'credit_card' | 'debit_card' | 'card' | 'bank' | 'w
 
 const slug = (s: string | null) => (s ?? 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unknown';
 
+// A credit card used over UPI: "Txn Rs.45 On HDFC Bank Card 8429 At gpay-... by UPI",
+// or a refund "adjusted against HDFC Bank Credit Card 8429". The money is on the card, not in a bank account.
+const CARD_RAIL =
+  /\b(?:on|against|to)\s+(?:your\s+)?[A-Za-z ]{0,24}?\bcredit\s*card\s*(?:no\.?\s*)?(?:ending(?:\s+with)?\s*)?(?:x+|\*+)?\d{4}\b|\bon\s+[A-Za-z ]{2,24}?\bcard\s+(?:x+|\*+)?\d{4}\b[\s\S]{0,80}?\bby\s+upi\b/i;
+
+/** Paid with (or refunded to) a card, including a credit card used through UPI. */
+export function isCardTxn(t: Txn): boolean {
+  if (t.mode === 'card') return true;
+  return !t.isManual && t.mode === 'upi' && !!t.account && !!t.rawSms && CARD_RAIL.test(t.rawSms);
+}
+
 /** Which card, bank account, wallet or cash a payment belongs to. */
 export function instrumentKey(t: Txn): string {
   if (t.isManual) return t.mode === 'card' ? 'card:manual' : t.mode === 'upi' ? 'bank:manual-upi' : 'cash';
-  if (t.mode === 'card') return `card:${slug(t.bank)}:${t.account ?? 'x'}`;
+  if (isCardTxn(t)) return `card:${slug(t.bank)}:${t.account ?? 'x'}`;
   if (t.mode === 'wallet') return `wallet:${slug(t.bank)}`;
   return `bank:${slug(t.bank)}:${t.account ?? 'x'}`;
 }
@@ -117,7 +128,7 @@ export function creditCardKeys(all: Txn[], bills: CardBill[]): Set<string> {
   const keys = new Set(bills.map(billKey));
   const lastDigits = new Set(bills.map((b) => b.account));
   for (const t of all) {
-    if (t.mode !== 'card' || t.isManual) continue;
+    if (!isCardTxn(t) || t.isManual) continue;
     if ((t.rawSms && CREDIT_HINT.test(t.rawSms)) || (t.account && lastDigits.has(t.account))) keys.add(instrumentKey(t));
   }
   return keys;
@@ -192,6 +203,12 @@ export type CardDue = {
   daysLeft: number | null;
   /** Spent on this card since the statement: the next bill so far. */
   spentSince: number;
+  /** The payments that paid this bill (card alert and/or bank debit), oldest first. */
+  paidBy: Txn[];
+  /** When it was paid, or null. */
+  paidOn: number | null;
+  /** Reminders that arrived after it was already paid (safe to ignore). */
+  remindersAfterPaid: number;
 };
 
 const startOfDay = (ts: number) => {
@@ -223,12 +240,16 @@ export function cardDues(bills: CardBill[], txns: Txn[], markedPaid: ReadonlySet
   const out: CardDue[] = [];
   for (const [key, bill] of latest) {
     const after = txns.filter((t) => t.timestamp >= bill.statementDate && !t.excluded && inHome(t));
-    const onCard = after.filter((t) => t.mode === 'card' && t.account === bill.account);
-    const paidOnCard = onCard.filter((t) => t.type === 'credit' && t.category === 'card_bill').reduce((a, t) => a + t.amount, 0);
+    const onCard = after.filter((t) => isCardTxn(t) && t.account === bill.account);
+    const cardCredits = onCard.filter((t) => t.type === 'credit' && t.category === 'card_bill');
+    const paidOnCard = cardCredits.reduce((a, t) => a + t.amount, 0);
     const tolerance = Math.max(1, bill.amountDue * 0.01);
-    const bankPayment = after.some(
-      (t) => t.type === 'debit' && t.category === 'card_bill' && t.mode !== 'card' && Math.abs(t.amount - bill.amountDue) <= tolerance,
+    const bankPayments = after.filter(
+      (t) => t.type === 'debit' && t.category === 'card_bill' && !isCardTxn(t) && Math.abs(t.amount - bill.amountDue) <= tolerance,
     );
+    const bankPayment = bankPayments.length > 0;
+    // The card alert, plus the bank debit it is linked to (or a bank debit for the same amount).
+    const paidBy = [...new Map([...cardCredits, ...bankPayments.slice(0, 1)].map((t) => [t.id, t])).values()].sort((a, b) => a.timestamp - b.timestamp);
     const marked = markedPaid.has(bill.id);
     let paidVia: CardDue['paidVia'] = null;
     let paid = paidOnCard;
@@ -244,6 +265,7 @@ export function cardDues(bills: CardBill[], txns: Txn[], markedPaid: ReadonlySet
     else if (paid > 0) status = 'partly_paid';
     else status = 'due';
     const spentSince = onCard.filter(countsAsSpend).reduce((a, t) => a + t.amount, 0);
+    const paidOn = status === 'paid' && paidBy.length ? paidBy[0].timestamp : null;
     out.push({
       key,
       bank: bill.bank,
@@ -256,6 +278,9 @@ export function cardDues(bills: CardBill[], txns: Txn[], markedPaid: ReadonlySet
       paidVia,
       daysLeft,
       spentSince,
+      paidBy,
+      paidOn,
+      remindersAfterPaid: paidOn === null ? 0 : (bill.reminders ?? []).filter((r) => r > paidOn).length,
     });
   }
   // Most urgent first: late, then soonest due, then paid.
@@ -267,6 +292,92 @@ export function cardDues(bills: CardBill[], txns: Txn[], markedPaid: ReadonlySet
 export function duesSummary(dues: CardDue[]): { total: number; open: CardDue[]; next: CardDue | null } {
   const open = dues.filter((d) => d.status !== 'paid');
   return { total: open.reduce((a, d) => a + d.left, 0), open, next: open[0] ?? null };
+}
+
+/* ---------- credit card overview ---------- */
+
+/** A statement older than this is not "the current bill" any more: a newer one was probably missed. */
+const STALE_BILL_DAYS = 40;
+
+export type CardSummary = {
+  key: string;
+  name: string;
+  /** The latest bill, or null when no statement was found. */
+  due: CardDue | null;
+  /** No statement in the last 40 days: we can't tell what is owed right now. */
+  stale: boolean;
+  /** Still to pay on the current bill. */
+  billLeft: number;
+  /** Spent since the statement: goes on the next bill. */
+  unbilled: number;
+  /** billLeft + unbilled: what you owe on this card right now. */
+  outstanding: number;
+};
+
+export type CardOverview = {
+  cards: CardSummary[];
+  totalOutstanding: number;
+  totalBillLeft: number;
+  totalUnbilled: number;
+  /** The soonest unpaid bill. */
+  next: CardDue | null;
+};
+
+/**
+ * Every credit card with what you owe on it now: the unpaid part of the latest bill plus what
+ * you spent since that statement. Cards with no recent statement are listed but not added up.
+ */
+export function cardOverview(bills: CardBill[], txns: Txn[], markedPaid: ReadonlySet<string>, now = Date.now()): CardOverview {
+  const dues = cardDues(bills, txns, markedPaid, now);
+  const credit = creditCardKeys(txns, bills);
+  const byKey = new Map(dues.map((d) => [d.key, d]));
+  const recent = now - 60 * DAY;
+  // Cards with a bill, or used in the last 60 days.
+  const keys = new Set([...byKey.keys()]);
+  for (const t of txns) if (t.timestamp >= recent && credit.has(instrumentKey(t))) keys.add(instrumentKey(t));
+  const cards: CardSummary[] = [];
+  for (const key of keys) {
+    const due = byKey.get(key) ?? null;
+    const stale = !due || now - due.bill.statementDate > STALE_BILL_DAYS * DAY;
+    // Only a recent card shows up without a bill; an old card with an old bill and no use is left out.
+    const used = txns.some((t) => t.timestamp >= recent && instrumentKey(t) === key);
+    if (stale && !used && !(due && due.status !== 'paid')) continue;
+    const sample = txns.find((t) => instrumentKey(t) === key);
+    const name = due?.name ?? nameFor('credit_card', sample?.bank ?? null, sample?.account ?? null);
+    const billLeft = due && !stale ? due.left : 0;
+    const unbilled = due && !stale ? due.spentSince : 0;
+    cards.push({ key, name, due, stale, billLeft, unbilled, outstanding: billLeft + unbilled });
+  }
+  const fresh = cards.filter((c) => !c.stale);
+  const open = dues.filter((d) => d.status !== 'paid' && cards.some((c) => c.key === d.key && !c.stale));
+  return {
+    cards: cards.sort((a, b) => Number(a.stale) - Number(b.stale) || b.outstanding - a.outstanding),
+    totalOutstanding: fresh.reduce((a, c) => a + c.outstanding, 0),
+    totalBillLeft: fresh.reduce((a, c) => a + c.billLeft, 0),
+    totalUnbilled: fresh.reduce((a, c) => a + c.unbilled, 0),
+    next: open[0] ?? null,
+  };
+}
+
+/**
+ * Card bill payments we could not tie to a bill or to the other side of the payment:
+ * money paid to a card from an account we don't see, or a bank payment to a card we don't see.
+ * Last 90 days, minus the ones you already checked.
+ */
+export function cardPaymentsToCheck(txns: Txn[], dues: CardDue[], checked: ReadonlySet<string>, now = Date.now()): Txn[] {
+  const matched = new Set(dues.flatMap((d) => d.paidBy.map((t) => t.id)));
+  return txns
+    .filter(
+      (t) =>
+        t.category === 'card_bill' &&
+        !t.excluded &&
+        !t.isManual &&
+        t.timestamp >= now - 90 * DAY &&
+        !(t.links ?? []).some((l) => l.kind === 'transfer') &&
+        !matched.has(t.id) &&
+        !checked.has(t.id),
+    )
+    .sort((a, b) => b.timestamp - a.timestamp);
 }
 
 /* ---------- payments to check ---------- */

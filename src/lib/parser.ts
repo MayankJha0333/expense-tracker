@@ -53,7 +53,7 @@ const BANKS: [string, string][] = [
   ['CITI', 'Citi'], ['SCBANK', 'Standard Chartered'], ['HSBC', 'HSBC'], ['AMEX', 'Amex'],
   ['ONECRD', 'OneCard'], ['IOBCHN', 'IOB'], ['IOBBNK', 'IOB'], ['CENTBK', 'Central Bank'],
   ['INDBNK', 'Indian Bank'], ['UCOBNK', 'UCO Bank'], ['JUPITR', 'Jupiter'], ['FIMONY', 'Fi'],
-  ['SLICE', 'slice'], ['SLCBNK', 'slice'], ['DBSBNK', 'DBS'], ['IDBI', 'IDBI Bank'], ['KVBANK', 'Karur Vysya'],
+  ['SLICE', 'slice'], ['SLCBNK', 'slice'], ['SLCEIT', 'slice'], ['DBSBNK', 'DBS'], ['IDBI', 'IDBI Bank'], ['KVBANK', 'Karur Vysya'],
   ['SIBSMS', 'South Indian Bank'], ['AMZPAY', 'Amazon Pay'], ['AMAZONPAY', 'Amazon Pay'],
   ['PHONPE', 'PhonePe'], ['MOBIKW', 'MobiKwik'], ['EQUITAS', 'Equitas'], ['BANDHN', 'Bandhan Bank'],
 ];
@@ -433,7 +433,13 @@ const CUR = CURRENCY_TOKEN_SOURCE;
 const BILL_TOTAL = [
   new RegExp(String.raw`\b(?:total\s+(?:amount\s+|amt\.?\s+)?due|total\s+amt\.?\s+due|amount\s+due|amt\.?\s+due|statement\s+(?:balance|amount)|total\s+outstanding|outstanding\s+amount)\b[^0-9₹$€£¥]{0,24}?(?:${CUR})?\s*:?\s*${NUM}`, 'i'),
   new RegExp(String.raw`${CUR}\s*${NUM}\s+(?:is\s+)?(?:due|payable)\b`, 'i'),
+  // Bill reminders from apps (Tata Neu, CRED): "Your HDFC Credit Card bill of Rs.49243.00 is due on 2026-10-21".
+  new RegExp(String.raw`\bbill\s+(?:of|amount|amt)\s*(?:of\s*)?:?\s*(?:${CUR})\s*${NUM}`, 'i'),
 ];
+/** "Statement Generated: For HDFC Bank Credit Card XX8429" — a new bill, with no amount in it. */
+const STATEMENT_READY = /\bstatement\s+(?:generated|is ready|has been generated|is generated)\b/i;
+/** "due on 2026-10-21", "pay by 2026-10-21". */
+const BILL_DATE_ISO = /\b(?:due|pay(?:able)?\s+by|by)\b[^0-9]{0,24}(\d{4})-(\d{1,2})-(\d{1,2})\b/i;
 const BILL_MIN = new RegExp(String.raw`\bmin(?:imum)?\.?\s+(?:amount\s+|amt\.?\s+)?due\b[^0-9₹$€£¥]{0,16}?(?:${CUR})?\s*:?\s*${NUM}`, 'i');
 const BILL_DATE =
   /\b(?:due\s+(?:date|by|on)|pay(?:able)?\s+by|due|by)\b\s*(?:is|:|-|of)?\s*(?:on\s+)?(\d{1,2})(?![0-9,])(?:st|nd|rd|th)?[\s\-/.]*([A-Za-z]{3,9}|\d{1,2})(?:[\s\-/.,]+(\d{2,4}))?/i;
@@ -451,6 +457,12 @@ const BILL_DATE_MONTH_FIRST =
   /\b(?:due\s+(?:date|by|on)|pay(?:able)?\s+by|due|by)\b\s*(?:is|:|-|of)?\s*(?:on\s+)?([A-Za-z]{3,9})\.?\s+(\d{1,2})(?![0-9])(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?/i;
 
 export function parseDueDate(text: string, statementDate: number): number | null {
+  const iso = BILL_DATE_ISO.exec(text);
+  if (iso) {
+    const [y, mo, d] = [Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])];
+    const at = new Date(y, mo, d);
+    return at.getDate() === d && at.getMonth() === mo ? at.getTime() : null;
+  }
   let m = BILL_DATE.exec(text);
   const mf = m ? null : BILL_DATE_MONTH_FIRST.exec(text);
   if (mf && MONTH_INDEX[mf[1].toLowerCase().slice(0, 3)] !== undefined) m = [mf[0], mf[2], mf[1], mf[3]] as unknown as RegExpExecArray;
@@ -479,10 +491,25 @@ export function parseDueDate(text: string, statementDate: number): number | null
  * Returns null for anything else (OTPs, offers, loan reminders, debit card texts).
  */
 export function parseCardBill(sms: RawSms): CardBill | null {
+  const notice = parseCardNotice(sms);
+  return notice?.kind === 'bill' && notice.bill.account ? (notice.bill as CardBill) : null;
+}
+
+/** A bill whose card number may be missing (app reminders name only the bank). */
+export type CardBillDraft = Omit<CardBill, 'account'> & { account: string | null };
+
+/** What a credit card message tells us: a bill (amount and due date), or that a statement is ready. */
+export type CardNotice =
+  | { kind: 'bill'; bill: CardBillDraft }
+  | { kind: 'statement'; bank: string | null; account: string; date: number };
+
+export function parseCardNotice(sms: RawSms): CardNotice | null {
   const sender = sms.sender.trim().toUpperCase();
   if (PERSONAL_SENDER.test(sender.replace(/[\s-]/g, ''))) return null;
   const text = normalize(sms.body);
   if (!text || isOtp(text) || !CREDIT_CARD.test(text)) return null;
+  // "Convert your spends of Rs.2714 into EMIs": an offer, not a bill.
+  if (/\bconvert(?:ed)?\b[\s\S]{0,80}\bemis?\b|\bsmart\s*emi\b/i.test(text)) return null;
   const senderBank = bankFor(sender);
   const bank = senderBank ?? bankFromText(text);
   const currency = currencyIn(text) ?? (senderBank ? 'INR' : null);
@@ -495,19 +522,27 @@ export function parseCardBill(sms: RawSms): CardBill | null {
       break;
     }
   }
-  if (total === null || !Number.isFinite(total) || total <= 0) return null;
   const account = findAccount(text);
-  if (!account) return null;
+  if (total === null || !Number.isFinite(total) || total <= 0) {
+    if (account && STATEMENT_READY.test(text)) return { kind: 'statement', bank, account, date: sms.date };
+    return null;
+  }
+  // Without a card number, only a clear bill reminder with a due date is worth keeping.
+  const dueDate = parseDueDate(text, sms.date);
+  if (!account && (dueDate === null || !/\bbill\b/i.test(text))) return null;
   const min = BILL_MIN.exec(text);
   const minDue = min ? toNumber(min[1]) : null;
   return {
-    id: `bill-${sms.id}`,
-    bank,
-    account,
-    amountDue: total,
-    ...(currency ? { currency } : {}),
-    minDue: minDue !== null && Number.isFinite(minDue) ? minDue : null,
-    dueDate: parseDueDate(text, sms.date),
-    statementDate: sms.date,
+    kind: 'bill',
+    bill: {
+      id: `bill-${sms.id}`,
+      bank,
+      account,
+      amountDue: total,
+      ...(currency ? { currency } : {}),
+      minDue: minDue !== null && Number.isFinite(minDue) ? minDue : null,
+      dueDate,
+      statementDate: sms.date,
+    },
   };
 }

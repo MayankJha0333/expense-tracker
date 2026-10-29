@@ -12,7 +12,7 @@ import { SmsNotice } from '../../components/SmsNotice';
 import { Ring } from '../../components/charts';
 import { HeroCard } from '../../components/HeroCard';
 import { AmountBar, Button, Card, Empty, Icon, IconButton, MixBar, NoticeRow, SectionHeader, Txt } from '../../components/ui';
-import { cardDues, duesSummary, needsReview, PAY_GROUP_LABEL, payGroupColorIndex, payMix, shortCardName } from '../../lib/accounts';
+import { cardOverview, needsReview, PAY_GROUP_LABEL, payGroupColorIndex, payMix, shortCardName } from '../../lib/accounts';
 import { budgetPace, shortDay, monthKey, monthName, monthShort, monthTitle, sameMonth, summarize, thisMonth } from '../../lib/analytics';
 import { currencyOf, type CurrencyCode } from '../../lib/currency';
 import { currencySymbol, formatCount, money, percent } from '../../lib/money';
@@ -29,7 +29,12 @@ export default function Home() {
 
   const summary = useMemo(() => summarize(txns, month), [txns, month]);
   const mix = useMemo(() => payMix(summary.txns), [summary]);
-  const dues = useMemo(() => duesSummary(cardDues(bills, txns, new Set(paidBills))), [bills, txns, paidBills]);
+  // Same numbers as the Credit cards screen: a statement older than ~40 days is not "the current bill".
+  const dues = useMemo(() => {
+    const ov = cardOverview(bills, txns, new Set(paidBills));
+    const open = ov.cards.flatMap((c) => (!c.stale && c.due && c.due.status !== 'paid' ? [c.due] : []));
+    return { total: ov.totalBillLeft, open, next: ov.next };
+  }, [bills, txns, paidBills]);
   const review = useMemo(() => summary.txns.filter(needsReview), [summary]);
   // Payments in another currency this month: listed, but never added to the totals above.
   const foreign = useMemo(() => {
@@ -131,6 +136,15 @@ export default function Home() {
           ) : null}
         </HeroCard>
 
+        <NoticeRow
+          tone="neutral"
+          icon="bank-transfer"
+          compact
+          title="Bank balance went down more than this?"
+          body="Card bills, moving money to your own accounts and investing are not spending. See where all your money went."
+          onPress={() => router.push('/flow')}
+        />
+
         {foreign.count > 0 ? (
           <NoticeRow
             tone="info"
@@ -168,7 +182,7 @@ export default function Home() {
                     ? 'Due today'
                     : `${next.daysLeft} ${next.daysLeft === 1 ? 'day' : 'days'}`
             }
-            onPress={() => router.push(`/account/${encodeURIComponent(next.key)}`)}
+            onPress={() => router.push('/cards')}
           />
         ) : null}
 

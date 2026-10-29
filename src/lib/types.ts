@@ -239,4 +239,6 @@ export type CardBill = {
   dueDate: number | null;
   /** When the statement SMS arrived. */
   statementDate: number;
+  /** When later messages about this same bill arrived (app reminders, a second statement SMS). */
+  reminders?: number[];
 };

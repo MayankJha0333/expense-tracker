@@ -57,3 +57,24 @@ category page.
 Not counted as people any more: UPI autopay (mandates) to companies, names with company
 endings (Pte, Pty, LLC, GmbH...) or shop words (Dosa, Snacks, Market...), Google Pay and
 Paytm shop QR codes, and "transaction has been reversed" notices (now money back).
+
+## Money out vs your bank balance
+
+"Money out" is what you bought in the month (card spending counts the day you buy). A bank
+balance also moves for card bills (paying earlier card shopping), moving money to your own
+accounts, investing, lending and refunds. `lib/moneyflow.ts` puts these side by side and shows
+each bank account's money in, money out and change (`/flow`, linked from Home).
+
+## Credit cards
+
+- Bills come from statement SMS and app reminders. Since mid-2026 HDFC sends "Statement
+  Generated … XX8429" with no amount; the amount comes in a reminder ("bill of Rs.49243 is due
+  on 2026-10-21") that names no card. `mergeCardNotices` joins them: the reminder takes the card
+  of the latest statement from that bank, the bill starts on the statement day, and repeats are
+  kept once (later ones counted as reminders).
+- A credit card used over UPI ("On HDFC Bank Card 8429 … by UPI") belongs to the card.
+- A card bill paid through an app can differ by a few rupees between the bank and the card
+  (₹49,238 vs ₹49,243); those two are still linked.
+- `/cards` shows what you owe now (unpaid bill + spent since the statement), due dates with days
+  left, which payment paid each bill, reminders that came after paying, and card payments we
+  couldn't match ("Payments to check": confirm, or open it to change it).

@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,8 +9,8 @@ import { flowLabel, TxnRow } from '../../components/finance';
 import { Badge, Button, Chip, Empty, NoticeRow, Txt } from '../../components/ui';
 import { Stagger } from '../../components/motion';
 import { PurposePicker } from '../../components/PurposePicker';
-import { needsReview, payLabel } from '../../lib/accounts';
-import { dayLabel, timeLabel } from '../../lib/analytics';
+import { cardDues, needsReview, payLabel } from '../../lib/accounts';
+import { dayLabel, shortDay, timeLabel } from '../../lib/analytics';
 import { CURRENCIES, currencyOf, getHomeCurrency } from '../../lib/currency';
 import { money } from '../../lib/money';
 import { canHavePurpose, kindLabel } from '../../lib/purposes';
@@ -28,9 +28,14 @@ export default function TxnDetail() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { find, setCategory, setExcluded, deleteManual, confirmCategory, txns, unlinkTxns } = useStore();
+  const { find, setCategory, setExcluded, deleteManual, confirmCategory, txns, unlinkTxns, bills, paidBills, checkedCardPayments } = useStore();
   const txn = id ? find(id) : undefined;
   const [applyToAll, setApplyToAll] = useState(true);
+  // For a card bill payment: which bill it paid.
+  const paidBill = useMemo(
+    () => (txn?.category === 'card_bill' ? (cardDues(bills, txns, new Set(paidBills)).find((d) => d.paidBy.some((t) => t.id === txn.id)) ?? null) : null),
+    [txn, bills, txns, paidBills],
+  );
 
   if (!txn) {
     return (
@@ -98,6 +103,25 @@ export default function TxnDetail() {
           </Txt>
         ) : null}
       </View>
+      {txn.category === 'card_bill' ? (
+        <NoticeRow
+          tone={paidBill || checkedCardPayments.includes(txn.id) || (txn.links ?? []).length ? 'info' : 'warn'}
+          icon={paidBill ? 'credit-card-check-outline' : 'credit-card-clock-outline'}
+          title={
+            paidBill
+              ? `Paid the ${shortDay(paidBill.bill.statementDate)} bill of ${money(paidBill.bill.amountDue)}`
+              : checkedCardPayments.includes(txn.id) || (txn.links ?? []).length
+                ? 'Card bill payment'
+                : 'Not matched to a card bill yet'
+          }
+          body={
+            paidBill
+              ? `${paidBill.name}${paidBill.bill.dueDate ? `, due ${shortDay(paidBill.bill.dueDate)}` : ''}. Open your credit cards.`
+              : 'See all your cards, their bills and due dates.'
+          }
+          onPress={() => router.push('/cards')}
+        />
+      ) : null}
       <Linked txn={txn} others={(txn.links ?? []).map((l) => find(l.otherId)).filter((o): o is Txn => !!o)} onUnlink={(o) => unlinkTxns(txn, o)} />
 
       {foreign ? (
