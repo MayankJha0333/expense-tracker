@@ -22,7 +22,7 @@ import {
   type InboxData,
   type InboxRead,
 } from '../src/lib/smsCache';
-import { otherGroups } from '../src/lib/sortOther';
+import { guessFromName, otherGroups, rankPicks, SORT_PICKS, usedMost } from '../src/lib/sortOther';
 import type { CategoryId, Txn } from '../src/lib/types';
 
 const DAY = 86_400_000;
@@ -328,5 +328,48 @@ describe('Sort "Other"', () => {
       ['Tiny Shop', 1, 50],
     ]);
     expect(unnamed.map((t) => t.merchant)).toEqual(['UPI payment']);
+  });
+});
+
+describe('Sort screen: likeliest category first', () => {
+  test('guesses from words in real shop names', () => {
+    expect(guessFromName('Google India Digital Serv')).toEqual(['software']);
+    expect(guessFromName('Cursor')).toEqual(['software']);
+    expect(guessFromName('Houseofkierayalimited')).toEqual(['home']);
+    expect(guessFromName('Snabbit')).toEqual(['house_help']);
+    expect(guessFromName('Kapoorscafe')).toEqual(['food']);
+    expect(guessFromName('Davanagere Benne Dose Ruchi')).toEqual(['food']);
+    expect(guessFromName('Ayush Hyper Market 1')).toEqual(['groceries']);
+    expect(guessFromName('Secretary Cbse Revalua')).toEqual(['education']);
+    expect(guessFromName('RoyalBison AutoRentals India P')).toEqual(['transport']);
+    expect(guessFromName('Mr VIVEK KUMAR SINGH')).toEqual(['people']);
+    expect(guessFromName('Amodh Kumar S O Ajay Lal')).toEqual(['people']);
+    // No clue in the name: no guess, rather than a wrong one.
+    expect(guessFromName('Sanjeeva')).toEqual([]);
+    expect(guessFromName('Shyamlalgayarisobhagwanlal')).toEqual([]);
+    expect(guessFromName('Bistro')).toEqual(['food']);
+    expect(guessFromName('Donatekart')).toEqual([]);
+    expect(guessFromName('Shri Ram Enterprises')).toEqual([]);
+  });
+
+  test('then the categories you use most, then the rest; never Other or card bills', () => {
+    const list = [
+      txn({ merchant: 'A', category: 'groceries' }),
+      txn({ merchant: 'B', category: 'groceries' }),
+      txn({ merchant: 'C', category: 'food' }),
+      txn({ merchant: 'D', category: 'other' }),
+      txn({ merchant: 'E', category: 'card_bill' }),
+      txn({ merchant: 'F', category: 'salary', type: 'credit' }),
+    ];
+    const most = usedMost(list);
+    expect(most).toEqual(['groceries', 'food']);
+    const r = rankPicks('Cursor', most);
+    expect(r.guessed).toBe(1);
+    expect(r.order.slice(0, 3)).toEqual(['software', 'groceries', 'food']);
+    expect([...r.order].sort()).toEqual([...SORT_PICKS].sort());
+    expect(r.order).not.toContain('other');
+    const none = rankPicks('Sanjeeva', most);
+    expect(none.guessed).toBe(0);
+    expect(none.order.slice(0, 2)).toEqual(['groceries', 'food']);
   });
 });
