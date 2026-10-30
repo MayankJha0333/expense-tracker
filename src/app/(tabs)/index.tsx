@@ -12,7 +12,7 @@ import { SmsNotice } from '../../components/SmsNotice';
 import { Ring } from '../../components/charts';
 import { HeroCard } from '../../components/HeroCard';
 import { AmountBar, Button, Card, Empty, Icon, IconButton, MixBar, NoticeRow, SectionHeader, Txt } from '../../components/ui';
-import { cardOverview, needsReview, PAY_GROUP_LABEL, payGroupColorIndex, payMix, shortCardName } from '../../lib/accounts';
+import { cardOverview, maybeFailed, needsReview, PAY_GROUP_LABEL, payGroupColorIndex, payMix, shortCardName } from '../../lib/accounts';
 import { budgetPace, shortDay, monthKey, monthName, monthShort, monthStartDate, monthTitle, sameMonth, summarize, thisMonth } from '../../lib/analytics';
 import { currencyOf, type CurrencyCode } from '../../lib/currency';
 import { currencySymbol, formatCount, money, percent } from '../../lib/money';
@@ -37,6 +37,19 @@ export default function Home() {
     return { total: ov.totalBillLeft, open, next: ov.next };
   }, [bills, txns, paidBills]);
   const review = useMemo(() => summary.txns.filter(needsReview), [summary]);
+  // A shop said these failed: asked on their own, because the answer changes your totals.
+  const failed = useMemo(() => review.filter(maybeFailed), [review]);
+  const otherReview = review.length - failed.length;
+  // "WWW Furlenco Com" and "Furlenco" are one shop.
+  const failedShops = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const t of failed) {
+      const name = t.merchant.replace(/^www\s+/i, '').replace(/\s+(com|in)$/i, '');
+      if (!seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+    }
+    const names = [...seen.values()];
+    return names.length > 2 ? [names[0], `${names.length - 1} more`] : names;
+  }, [failed]);
   // Shops in "Other" across all months: sorting one moves every payment to it.
   const otherShops = useMemo(() => otherGroups(txns).groups.length, [txns]);
   // Payments in another currency this month: listed, but never added to the totals above.
@@ -313,12 +326,26 @@ export default function Home() {
           />
         )}
 
+        {/* Payments a shop said failed */}
+        {failed.length > 0 ? (
+          <NoticeRow
+            tone="warn"
+            icon="cash-refund"
+            title={`${failed.length} ${failed.length === 1 ? 'payment' : 'payments'} may have failed · ${money(failed.reduce((a, t) => a + t.amount, 0))}`}
+            body={`${failedShops.join(' and ')} said it failed.`}
+            pill="Check"
+            onPress={() =>
+              failed.length === 1 ? router.push(`/txn/${failed[0].id}`) : router.navigate({ pathname: '/activity', params: { filter: 'review' } })
+            }
+          />
+        ) : null}
+
         {/* Payments to check */}
-        {review.length > 0 ? (
+        {otherReview > 0 ? (
           <NoticeRow
             tone="warn"
             icon="help-circle-outline"
-            title={`${review.length} ${review.length === 1 ? 'payment needs' : 'payments need'} a look`}
+            title={`${otherReview} ${otherReview === 1 ? 'payment needs' : 'payments need'} a look`}
             body="Pick a category so your totals are right."
             pill="Review"
             onPress={() => router.navigate({ pathname: '/activity', params: { filter: 'review' } })}

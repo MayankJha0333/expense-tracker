@@ -1,10 +1,11 @@
 /* Run: npx vitest run tests/review-fixes.test.ts — rules on made-up names, stable ids, keywords, cache, Sort screen. */
 import { describe, expect, test } from 'vitest';
 
+import { maybeFailed, needsReview } from '../src/lib/accounts';
 import { categoryFromMerchant } from '../src/lib/categorize';
 import { demoInbox } from '../src/lib/demo';
-import { isPlaceholderName, PARSER_VERSION, type RawSms } from '../src/lib/parser';
-import { isRelevant, processInbox, stableSmsId, withStableIds } from '../src/lib/pipeline';
+import { isPlaceholderName, PARSER_VERSION, parseFailNotice, parseSms, type RawSms } from '../src/lib/parser';
+import { isRelevant, markFailedPayments, processInbox, stableSmsId, withStableIds } from '../src/lib/pipeline';
 import { canHavePurpose } from '../src/lib/purposes';
 import { applyPrefs, EMPTY_PREFS, hasOldIds, migrateIds, prunePrefs, type Prefs } from '../src/lib/prefs';
 import {
@@ -371,5 +372,111 @@ describe('Sort screen: likeliest category first', () => {
     const none = rankPicks('Sanjeeva', most);
     expect(none.guessed).toBe(0);
     expect(none.order.slice(0, 2)).toEqual(['groceries', 'food']);
+  });
+});
+
+/* ---------- "your payment failed" messages ---------- */
+
+describe('payments a shop said failed', () => {
+  const MIN = 60_000;
+  const at = new Date(2026, 9, 12, 5, 58).getTime();
+  const msg = (sender: string, body: string, date = at): RawSms => ({ id: `f${date}${sender}`, sender, body, date });
+  // Real wordings (numbers changed).
+  const furlenco = msg('VA-FURLEN-S', "Oops! Your payment of  927.05 for your renewal didn't go through. You can try again on the app. If debited, your bank will reverse the amount shortly - Team Furlenco");
+  const gokwik = msg('VA-GKKWIK-S', 'Payment for Banana Club In Vogue Pvt Ltd order KWIK0111 failed. Any debited amount will be refunded in 4-7 days. Powered by GoKwik!');
+  const airtel = msg('AD-AIRINF-S', 'Hi, Payment of Rs. 1059.64 via Upi has failed. Order Id: 7516. If money has been deducted, it will be refunded to your account within 7-10 days.');
+  const swiggy = msg('TX-SWIGGY-S', 'Your payment for Swiggy order #2488 was not completed. Any amount if debited from UPI will get refunded within 4-7 days.');
+
+  test('reads the amount when there is one, and never counts the message as a payment', () => {
+    expect(parseFailNotice(furlenco)?.amount).toBe(927.05);
+    expect(parseFailNotice(airtel)?.amount).toBe(1059.64);
+    expect(parseFailNotice(gokwik)?.amount).toBeNull();
+    expect(parseFailNotice(swiggy)?.amount).toBeNull();
+    for (const m of [furlenco, gokwik, airtel, swiggy]) expect(parseSms(m).ok).toBe(false);
+  });
+
+  test('a declined card or an autopay that never ran is not a notice: no money moved', () => {
+    expect(parseFailNotice(msg('AD-HDFCBK-S', 'TXN DECLINED: Rs.500.79 on 06-10-26 at 00:54 on HDFC Bank Debit Card xx2232. Reason: Intl online usage disabled.'))).toBeNull();
+    expect(parseFailNotice(msg('JK-FURLEN-S', 'Hi. Your autopay for Furlenco failed due to insufficient balance. Kindly renew your subscription to avoid late fees.'))).toBeNull();
+    expect(parseFailNotice(msg('JD-BIGBKT-S', 'Dear Mayank, Payment for your bbnow Order #1866 has failed. Kindly retry the payment for your order to be processed.'))).toBeNull();
+    expect(parseFailNotice(msg('+919876543210', 'Your payment failed, I will refund you'))).toBeNull();
+    expect(parseFailNotice(msg('VM-SHOPPY-P', 'Payment failed? Refund guaranteed! Shop now'))).toBeNull();
+  });
+
+  test('kept between starts, so the note survives a read from the cache', () => {
+    for (const m of [furlenco, gokwik, airtel, swiggy]) expect(isRelevant(m)).toBe(true);
+  });
+
+  const debit = (p: Partial<Txn> & { merchant: string; amount: number; timestamp: number }) =>
+    txn({ category: 'other', ...p, merchantKey: p.merchant.toLowerCase().replace(/[^a-z0-9]/g, '') });
+  const notice = (m: RawSms) => parseFailNotice(m)!;
+
+  test('the same amount to the same shop, from both accounts, both get the note', () => {
+    const mandate = debit({ merchant: 'Furlenco', amount: 927.05, timestamp: at - 9 * 60 * MIN, account: '7175' });
+    const retry = debit({ merchant: 'WWW Furlenco Com', amount: 927.05, timestamp: at, account: '5043' });
+    const other = debit({ merchant: 'Furlenco', amount: 675.97, timestamp: at - 60 * MIN });
+    markFailedPayments([mandate, retry, other], [notice(furlenco)]);
+    expect(!!mandate.failNotice).toBe(true);
+    expect(!!retry.failNotice).toBe(true);
+    expect(other.failNotice).toBeUndefined();
+  });
+
+  test('no amount: the closest payment to that shop just before the message', () => {
+    const order = debit({ merchant: 'Bananaclub', amount: 3747, timestamp: at - 5 * MIN });
+    const older = debit({ merchant: 'Bananaclub', amount: 999, timestamp: at - 25 * MIN });
+    const otherShop = debit({ merchant: 'Zepto', amount: 3747, timestamp: at - 2 * MIN });
+    markFailedPayments([order, older, otherShop], [notice(gokwik)]);
+    expect(!!order.failNotice).toBe(true);
+    expect(older.failNotice).toBeUndefined();
+    expect(otherShop.failNotice).toBeUndefined();
+  });
+
+  test('no amount and nothing to that shop in the 30 minutes before: no note', () => {
+    const lateOrder = debit({ merchant: 'Swiggy', amount: 241, timestamp: at - 45 * MIN });
+    markFailedPayments([lateOrder], [notice(swiggy)]);
+    expect(lateOrder.failNotice).toBeUndefined();
+  });
+
+  test('a payment made after the failure message is the retry that worked, not the failed one', () => {
+    // Airtel said it failed on 14 Oct night; the payment that went through was on 15 Oct.
+    const retry = debit({ merchant: 'Airtel Payments Bank', amount: 1059.64, timestamp: at + 17 * 60 * MIN });
+    markFailedPayments([retry], [notice(airtel)]);
+    expect(retry.failNotice).toBeUndefined();
+  });
+
+  test('a bank that names no shop: same amount within 15 minutes still matches', () => {
+    const noName = debit({ merchant: 'UPI payment', amount: 1059.64, timestamp: at - 4 * MIN });
+    const dayBefore = debit({ merchant: 'UPI payment', amount: 1059.64, timestamp: at - 20 * 60 * MIN });
+    markFailedPayments([noName, dayBefore], [notice(airtel)]);
+    expect(!!noName.failNotice).toBe(true);
+    expect(dayBefore.failNotice).toBeUndefined();
+  });
+
+  test('asks until you answer: "money came back" (left out) or "it went through" (confirmed)', () => {
+    const t = debit({ merchant: 'Bananaclub', amount: 3747, timestamp: at, failNotice: { at, text: 'failed' } });
+    expect(needsReview(t)).toBe(true);
+    expect(maybeFailed(t)).toBe(true);
+    expect(maybeFailed({ ...t, excluded: true })).toBe(false);
+    expect(maybeFailed({ ...t, categorySource: 'manual' })).toBe(false);
+    // Already refunded and linked: Kharcha knows what happened.
+    expect(maybeFailed({ ...t, links: [{ kind: 'refund', otherId: 'x', source: 'auto', amount: 3747 }] })).toBe(false);
+  });
+
+  test('end to end: the bank alert and the shop message become one payment with a note; totals unchanged', () => {
+    const paid = msg('VA-SLCBNK-S', 'Rs. 3,747 sent from a/c xx5043 on 11-Oct-26 to BANANACLUB (UPI Ref: 628459662668). Not you? Call 08048329999 - slice', at - 5 * MIN);
+    const r = processInbox([paid, gokwik]);
+    expect(r.txns).toHaveLength(1);
+    expect(r.txns[0].amount).toBe(3747);
+    expect(r.txns[0].failNotice?.text).toContain('Banana Club');
+    expect(r.stats.skipped.failed ?? 0).toBe(1);
+  });
+
+  test('the cache gives the same note as reading the whole inbox', () => {
+    const paid = msg('VA-SLCBNK-S', 'Rs. 3,747 sent from a/c xx5043 on 11-Oct-26 to BANANACLUB (UPI Ref: 628459662668). Not you? Call 08048329999 - slice', at - 5 * MIN);
+    const all = [paid, gokwik, msg('AD-HDFCBK-S', '123456 is your OTP. Do not share it.', at - MIN)];
+    const read: InboxRead = { messages: all, personalSkipped: 0, promoSkipped: 0, limitReached: false, oldest: null };
+    const full = fromFullRead(read, at + MIN);
+    expect(full.cache.messages).toHaveLength(2);
+    expect(fromCache(full.cache).txns[0].failNotice).toEqual(full.data.txns[0].failNotice);
   });
 });

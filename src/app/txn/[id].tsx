@@ -76,8 +76,11 @@ export default function TxnDetail() {
     ],
   ];
   if (txn.bank || txn.account) details.push([txn.mode === 'card' ? 'Card' : 'Account', [txn.bank, txn.account ? `ending ${txn.account}` : null].filter(Boolean).join(', ')]);
-  // "Paid twice?" has its own notice below.
-  const review = needsReview(txn) && !txn.maybeDuplicateOf;
+  // A shop said it failed: asked below, until you say whether the money came back.
+  const failed = !!txn.failNotice && needsReview(txn);
+  // "Paid twice?" and "Did this go through?" have their own notices below.
+  const review = needsReview(txn) && !txn.maybeDuplicateOf && !failed;
+  const twin = txn.maybeDuplicateOf ? find(txn.maybeDuplicateOf) : undefined;
   if (txn.note) details.push(['Note', txn.note]);
   const foreign = isForeign(txn);
   const code = currencyOf(txn);
@@ -127,7 +130,55 @@ export default function TxnDetail() {
           onPress={() => router.push('/cards')}
         />
       ) : null}
-      {txn.maybeDuplicateOf && find(txn.maybeDuplicateOf) ? (
+      {failed && txn.failNotice ? (
+        <View style={{ gap: space.sm }}>
+          <NoticeRow
+            tone="warn"
+            icon="cash-refund"
+            title="Did this go through?"
+            body={`A message on ${shortDay(txn.failNotice.at)} said it failed. Check your bank app.`}
+          />
+          <View style={[styles.quote, { backgroundColor: p.surface, borderColor: p.line }]}>
+            <Txt variant="small" color={p.inkSoft}>
+              &ldquo;{txn.failNotice.text}&rdquo;
+            </Txt>
+          </View>
+          {twin ? (
+            <>
+              <Txt variant="small" color={p.muted}>
+                The same amount also went to {txn.merchant} from another account. One of them may be the payment that failed:
+              </Txt>
+              <TxnRow txn={twin} showDate />
+            </>
+          ) : null}
+          <View style={styles.choiceRow}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Money came back"
+                icon="cash-refund"
+                compact
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setExcluded(txn, true);
+                }}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="It went through"
+                icon="check"
+                kind="secondary"
+                compact
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  confirmCategory(txn);
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      ) : null}
+      {!failed && twin ? (
         <View style={{ gap: space.sm }}>
           <NoticeRow
             tone="warn"
@@ -135,7 +186,7 @@ export default function TxnDetail() {
             title="Paid twice?"
             body={`The same amount went to ${txn.merchant} from another account the same day. If one of them didn't really go through, turn off "${countLabel}" below on that one.`}
           />
-          <TxnRow txn={find(txn.maybeDuplicateOf) as Txn} showDate />
+          <TxnRow txn={twin} showDate />
           {txn.categorySource === 'auto' && !txn.excluded ? (
             <Button
               label="Both are real payments"
@@ -144,9 +195,8 @@ export default function TxnDetail() {
               compact
               onPress={() => {
                 Haptics.selectionAsync().catch(() => {});
-                const other = txn.maybeDuplicateOf ? find(txn.maybeDuplicateOf) : undefined;
                 confirmCategory(txn);
-                if (other) confirmCategory(other);
+                confirmCategory(twin);
               }}
             />
           ) : null}
@@ -356,6 +406,8 @@ function Linked({ txn, others, onUnlink }: { txn: Txn; others: Txn[]; onUnlink: 
 }
 
 const styles = StyleSheet.create({
+  quote: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, padding: space.md },
+  choiceRow: { flexDirection: 'row', gap: space.sm },
   linkCard: { borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: space.md, paddingBottom: space.xs },
   table: { borderTopWidth: StyleSheet.hairlineWidth },
   tableRow: {

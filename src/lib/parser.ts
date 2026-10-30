@@ -13,7 +13,7 @@ import type { CardBill, PayMode, ScheduledDebit, SkipReason, TxnType } from './t
  * Changes to how a kept message is read (names, categories, amounts) don't need it: kept
  * messages are read again with the new code on every start.
  */
-export const PARSER_VERSION = 1;
+export const PARSER_VERSION = 2;
 
 /** One SMS as it comes from the phone's inbox. */
 export type RawSms = { id: string; sender: string; body: string; date: number };
@@ -617,4 +617,49 @@ export function parseFundName(sms: RawSms): string | null {
   if (words.length > 1 && words[0].toLowerCase() === words[1].toLowerCase()) words.shift();
   const name = words.join(' ');
   return name.length >= 4 ? name : null;
+}
+
+// ---------- "your payment failed" messages from shops and banks ----------
+
+// "Payment of Rs. 1059.64 via Upi has failed", "was not completed", "didn't go through", "was unsuccessful".
+const FAIL_WORDS = /\b(?:has failed|have failed|failed|was not completed|not completed|did(?:n'?t| not) go through|was unsuccessful|unsuccessful|could not be (?:processed|completed))\b/i;
+// ...and a promise to send the money back. Without it the message is about a card that was declined
+// or an autopay that never ran: no money moved, nothing to check.
+const REFUND_PROMISE = /\b(?:refund(?:ed)?|revers(?:e|ed|al))\b/i;
+// Furlenco: "Your payment of  927.05 for your renewal didn't go through" (no Rs.).
+const PAYMENT_OF = /\bpayment of\s+(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\b/i;
+
+/** A shop or bank saying a payment failed and any money taken will come back. */
+export type FailNotice = {
+  at: number;
+  /** The amount in the message, or null when it names only an order. */
+  amount: number | null;
+  /** Sender code and message as one lowercase run of letters and digits, for finding the shop's name in it. */
+  key: string;
+  /** The message itself, shown on the payment it is about. */
+  text: string;
+};
+
+/**
+ * "Payment for Banana Club ... order failed. Any debited amount will be refunded in 4-7 days."
+ * These never count as a payment (parseSms drops them as failed). They are kept to put a "did this
+ * go through?" note on the payment they are about (see markFailedPayments in lib/pipeline.ts).
+ */
+export function parseFailNotice(sms: RawSms): FailNotice | null {
+  const sender = sms.sender.trim().toUpperCase();
+  if (PERSONAL_SENDER.test(sender.replace(/[\s-]/g, ''))) return null;
+  if (HEADER_SUFFIX.exec(sender)?.[1] === 'P') return null;
+  const text = normalize(sms.body);
+  if (!text || isOtp(text) || !FAIL_WORDS.test(text) || !REFUND_PROMISE.test(text)) return null;
+  let amount = findMoney(text)?.amount ?? null;
+  if (amount === null) {
+    const m = PAYMENT_OF.exec(text);
+    if (m) amount = Number(m[1].replace(/,/g, ''));
+  }
+  return {
+    at: sms.date,
+    amount: amount !== null && Number.isFinite(amount) && amount > 0 ? amount : null,
+    key: keyOf(`${coreHeader(sender) ?? ''} ${text}`),
+    text: text.length > 220 ? `${text.slice(0, 217)}...` : text,
+  };
 }

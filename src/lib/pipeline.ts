@@ -1,5 +1,19 @@
 import { categorize } from './categorize';
-import { coreHeader, keyOf, parseCardNotice, parseFundName, parseScheduledDebit, parseSms, type CardBillDraft, type CardNotice, type ParsedTxn, type RawSms } from './parser';
+import {
+  coreHeader,
+  isPlaceholderName,
+  keyOf,
+  parseCardNotice,
+  parseFailNotice,
+  parseFundName,
+  parseScheduledDebit,
+  parseSms,
+  type CardBillDraft,
+  type CardNotice,
+  type FailNotice,
+  type ParsedTxn,
+  type RawSms,
+} from './parser';
 import type { CardBill, ScanStats, ScheduledDebit, SkipReason, Txn } from './types';
 
 const DUPLICATE_WINDOW_MS = 5 * 60 * 1000;
@@ -126,6 +140,70 @@ function nameMaskedPayments(kept: Txn[]) {
   }
 }
 
+/* ---------- "your payment failed" ---------- */
+
+const MIN = 60_000;
+/** An autopay can be taken the night before the shop says it failed. */
+const FAIL_BEFORE_WITH_AMOUNT = 24 * 60 * MIN;
+/** With no amount, only a payment just before the message can be the one it means. */
+const FAIL_BEFORE_NO_AMOUNT = 30 * MIN;
+/** The shop's message and the bank's can arrive in either order. */
+const FAIL_AFTER = 10 * MIN;
+/** Phones stamp messages from different senders a little apart. */
+const FAIL_CLOCK_SLACK = 2 * MIN;
+/** Same amount this close in time is the same payment, even when the bank names no shop. */
+const FAIL_SAME_MOMENT = 15 * MIN;
+// Web and company words around a shop's name: "WWW FURLENCO COM", "BANANACLUB PVT LTD".
+const NAME_NOISE = /^www|(?:com|in|pvtltd|privatelimited|ltd|limited|pvt)+$/g;
+
+/** The part of a shop's name worth looking for in a message: "wwwfurlencocom" → "furlenco". */
+const shopCore = (merchantKey: string) => merchantKey.replace(NAME_NOISE, '');
+
+/**
+ * Puts a note on payments a shop or bank later said failed ("didn't go through, any money taken
+ * will be refunded"). Nothing is taken off the totals: often no money left at all, or the money is
+ * already back, and only you can tell. The payment shows up in "needs a look" until you say
+ * it came back (it stops counting) or that it went through.
+ *
+ * A message matches a payment that came before it (or at most 10 minutes after) when:
+ * - it gives an amount: the same rupees and paise, within a day, and the shop's name is in the
+ *   message or the two are within 15 minutes;
+ * - it gives no amount: the shop's name is in the message, and it is the closest payment to that shop in the
+ *   30 minutes before.
+ */
+export function markFailedPayments(kept: Txn[], notices: FailNotice[]): void {
+  if (!notices.length) return;
+  const debits = kept.filter((t) => t.type === 'debit' && !t.isManual);
+  const mark = (t: Txn, n: FailNotice) => {
+    if (!t.failNotice) t.failNotice = { at: n.at, text: n.text };
+  };
+  for (const n of notices) {
+    const named = (t: Txn) => {
+      const core = isPlaceholderName(t.merchant) ? '' : shopCore(t.merchantKey);
+      return core.length >= 4 && n.key.includes(core);
+    };
+    if (n.amount === null) {
+      // Only an order number: the one payment to that shop just before the message (two orders a few
+      // minutes apart are usually a failed try and the retry that worked).
+      let best: Txn | null = null;
+      for (const t of debits) {
+        const gap = n.at - t.timestamp;
+        if (gap > FAIL_BEFORE_NO_AMOUNT || gap < -FAIL_CLOCK_SLACK || !named(t)) continue;
+        if (!best || Math.abs(gap) < Math.abs(n.at - best.timestamp)) best = t;
+      }
+      if (best) mark(best, n);
+      continue;
+    }
+    const cents = Math.round(n.amount * 100);
+    for (const t of debits) {
+      const gap = n.at - t.timestamp;
+      if (gap > FAIL_BEFORE_WITH_AMOUNT || gap < -FAIL_AFTER || Math.round(t.amount * 100) !== cents) continue;
+      // The same amount from two accounts (an autopay and a retry by hand): both get the note, you pick.
+      if (named(t) || Math.abs(gap) <= FAIL_SAME_MOMENT) mark(t, n);
+    }
+  }
+}
+
 /* ---------- ids that survive a new phone ---------- */
 
 /** cyrb53: a fast 53-bit string hash (not for security, just for telling messages apart). */
@@ -166,7 +244,7 @@ export function withStableIds(messages: RawSms[]): { messages: RawSms[]; idMap: 
 
 /**
  * True when a message adds something to the app: a payment, a credit card bill or statement notice,
- * or a payment the bank says it will take. Only these are kept between starts (see lib/smsCache.ts);
+ * a payment the bank says it will take, or a shop saying a payment failed. Only these are kept between starts (see lib/smsCache.ts);
  * OTPs, offers and everything else are not. Mirrors the checks in processInbox, so the kept messages
  * alone give exactly the same payments, bills and scheduled payments as the whole inbox.
  * Fund names are kept on their own, because they come from OTP messages.
@@ -175,8 +253,8 @@ export function isRelevant(sms: RawSms): boolean {
   if (parseScheduledDebit(sms)) return true;
   const r = parseSms(sms);
   if (r.ok) return true;
-  if (r.reason === 'reminder' || r.reason === 'promo' || r.reason === 'not_transaction') return parseCardNotice(sms) !== null;
-  return false;
+  if ((r.reason === 'reminder' || r.reason === 'promo' || r.reason === 'not_transaction') && parseCardNotice(sms) !== null) return true;
+  return parseFailNotice(sms) !== null;
 }
 
 /** Why a message was skipped, or null when it is kept. Used to count what new messages were. */
@@ -194,6 +272,7 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
   };
   const kept: Txn[] = [];
   const notices: CardNotice[] = [];
+  const failed: FailNotice[] = [];
   // Payments the bank said it will take (SIP autopay, mandates), once each.
   const scheduled = new Map<string, ScheduledDebit>();
   const funds = new Set<string>();
@@ -225,6 +304,8 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
         const notice = parseCardNotice(sms);
         if (notice) notices.push(notice);
       }
+      const f = parseFailNotice(sms);
+      if (f) failed.push(f);
       continue;
     }
     const p = r.txn;
@@ -263,6 +344,7 @@ export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<Sk
     });
   }
   nameMaskedPayments(kept);
+  markFailedPayments(kept, failed);
   kept.sort((a, b) => b.timestamp - a.timestamp);
   const personal = extraSkipped.personal ?? 0;
   const stats: ScanStats = { scanned: messages.length + personal, kept: kept.length, skipped };

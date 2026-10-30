@@ -91,7 +91,7 @@ function cacheChecks(): boolean {
   const read = (messages: RawSms[]): InboxRead => ({ messages, personalSkipped: 0, promoSkipped: 0, limitReached: false, oldest: null });
   const sig = (d: InboxData) =>
     JSON.stringify([
-      d.txns.map((t) => [t.id, t.timestamp, t.type, t.amount, t.merchant, t.category, t.account]),
+      d.txns.map((t) => [t.id, t.timestamp, t.type, t.amount, t.merchant, t.category, t.account, t.failNotice?.at ?? null]),
       d.bills.map((b) => [b.id, b.account, b.amountDue, b.dueDate]),
       d.scheduled.map((s) => [s.id, s.amount, s.date]),
       [...d.funds].sort(),
@@ -113,6 +113,9 @@ const cacheOk = cacheChecks();
 
 const now = snapshot();
 console.log(`${inbox.messages.length} messages → ${txns.length} payments, ${bills.length} card bills (pipeline ${(t1 - t0).toFixed(0)} ms, linking ${(t2 - t1).toFixed(0)} ms)`);
+// Notes only, never counted differently: listed so a change in what gets a note is easy to see.
+const failedNotes = txns.filter((t) => t.failNotice && !(t.links ?? []).length);
+console.log(`${failedNotes.length} payments with a "the shop said it failed" note`);
 
 if (update || !existsSync(GOLDEN)) {
   writeFileSync(GOLDEN, JSON.stringify(now));

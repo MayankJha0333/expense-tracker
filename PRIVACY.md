@@ -1,6 +1,6 @@
 # Kharcha privacy policy
 
-_Last updated 30 October 2026_
+_Last updated 31 October 2026_
 
 > Kharcha works on your phone. There is no account and no cloud storage, and your messages and money data never leave your phone. The only outside service Kharcha talks to is Expo's update service, to get fixes to the app.
 
@@ -14,7 +14,7 @@ We do not run any server for Kharcha, and we never receive your data. Kharcha is
 
 SMS, only if you allow it. With the "SMS" permission, Kharcha reads messages in your inbox from about the last 13 months.
 
-Messages from personal phone numbers, and offers from promotional senders, are dropped inside the app's native code before any other part of the app sees them. Of the rest, Kharcha keeps only bank, card, UPI and wallet payment alerts. OTPs, offers, failed payments and money requests are thrown away. From credit card statement and bill reminder messages, Kharcha uses only the amount due, the due date and the card's last 4 digits, so it can show which bills are still to pay; other reminders are thrown away.
+Messages from personal phone numbers, and offers from promotional senders, are dropped inside the app's native code before any other part of the app sees them. Of the rest, Kharcha keeps only bank, card, UPI and wallet payment alerts. OTPs, offers and money requests are thrown away. A message saying a payment failed ("any money taken will be refunded") is never counted as a payment: Kharcha uses it only to ask you, on the payment it is about, whether the money came back. From credit card statement and bill reminder messages, Kharcha uses only the amount due, the due date and the card's last 4 digits, so it can show which bills are still to pay; other reminders are thrown away.
 
 From each payment alert it takes the amount, whether money went out or came in, the shop or person, the last digits of the account or card, how you paid and the date. The original alert is shown on that payment's details screen so you can check it.
 
@@ -28,7 +28,7 @@ All reading, sorting and charting happens on your phone. There is no remote proc
 
 ## Where it is stored, and for how long
 
-So it can open quickly and read only new messages next time, Kharcha keeps a copy of the payment alerts, card statement messages and scheduled payment messages it uses, in its private app storage on this phone. It never keeps OTPs, offers or messages from people. From messages about SIPs, it keeps only the fund's name.
+So it can open quickly and read only new messages next time, Kharcha keeps a copy of the payment alerts, card statement messages, scheduled payment messages and "payment failed" messages it uses, in its private app storage on this phone. It never keeps OTPs, offers or messages from people. From messages about SIPs, it keeps only the fund's name.
 
 Kharcha reads your whole inbox again at least every 30 days. Then a message you deleted from your inbox, or one older than about 13 months, disappears from Kharcha too.
 

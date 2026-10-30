@@ -154,6 +154,8 @@ export type Txn = {
   purpose?: PurposeId;
   /** Another payment of the same amount to the same place, the same day, from another account: maybe paid twice. */
   maybeDuplicateOf?: string;
+  /** The shop or bank later said this payment failed and the money would come back. See markFailedPayments in lib/pipeline.ts. */
+  failNotice?: { at: number; text: string };
 };
 
 /** What a payment to a person is for. Picking one moves every payment to them into its category. */
