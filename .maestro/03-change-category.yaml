@@ -1,0 +1,11 @@
+# Open the cash expense and move it to another category.
+appId: ${APP_ID || "com.mayankjha.kharcha"}
+---
+- runFlow: 02-add-cash.yaml
+- tapOn: "Maestro chai.*"
+- assertVisible: "Category"
+- scrollUntilVisible:
+    element: "Groceries"
+    direction: DOWN
+- tapOn: "Groceries"
+- assertVisible: "You picked this category"

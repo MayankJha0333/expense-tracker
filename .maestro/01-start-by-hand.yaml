@@ -1,0 +1,13 @@
+# A new install: choose "add entries by hand" and land on Home.
+appId: ${APP_ID || "com.mayankjha.kharcha"}
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Add entries by hand.*"
+    timeout: 15000
+- tapOn: "Add entries by hand.*"
+- extendedWaitUntil:
+    visible: "Settings, theme and privacy"
+    timeout: 10000
+- assertVisible: "Saved in.*"

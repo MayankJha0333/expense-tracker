@@ -13,9 +13,10 @@ import { Ring } from '../../components/charts';
 import { HeroCard } from '../../components/HeroCard';
 import { AmountBar, Button, Card, Empty, Icon, IconButton, MixBar, NoticeRow, SectionHeader, Txt } from '../../components/ui';
 import { cardOverview, needsReview, PAY_GROUP_LABEL, payGroupColorIndex, payMix, shortCardName } from '../../lib/accounts';
-import { budgetPace, shortDay, monthKey, monthName, monthShort, monthTitle, sameMonth, summarize, thisMonth } from '../../lib/analytics';
+import { budgetPace, shortDay, monthKey, monthName, monthShort, monthStartDate, monthTitle, sameMonth, summarize, thisMonth } from '../../lib/analytics';
 import { currencyOf, type CurrencyCode } from '../../lib/currency';
 import { currencySymbol, formatCount, money, percent } from '../../lib/money';
+import { otherGroups } from '../../lib/sortOther';
 import { useStore } from '../../lib/store';
 import { cat, isForeign, type IconName } from '../../lib/types';
 import { space, usePalette } from '../../theme';
@@ -25,7 +26,7 @@ export default function Home() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const tabSpace = useTabBarSpace();
-  const { txns, month, setMonth, refresh, refreshing, stats, permission, source, budget, bills, paidBills } = useStore();
+  const { txns, month, setMonth, refresh, refreshing, stats, permission, source, budget, bills, paidBills, readLimit } = useStore();
 
   const summary = useMemo(() => summarize(txns, month), [txns, month]);
   const mix = useMemo(() => payMix(summary.txns), [summary]);
@@ -36,6 +37,8 @@ export default function Home() {
     return { total: ov.totalBillLeft, open, next: ov.next };
   }, [bills, txns, paidBills]);
   const review = useMemo(() => summary.txns.filter(needsReview), [summary]);
+  // Shops in "Other" across all months: sorting one moves every payment to it.
+  const otherShops = useMemo(() => otherGroups(txns).groups.length, [txns]);
   // Payments in another currency this month: listed, but never added to the totals above.
   const foreign = useMemo(() => {
     const list = summary.txns.filter((t) => isForeign(t) && !t.excluded);
@@ -91,6 +94,16 @@ export default function Home() {
         ) : (
           <SmsNotice />
         )}
+
+        {/* The inbox had more messages than Kharcha reads: say which months are missing payments. */}
+        {readLimit && readLimit.oldest !== null && monthStartDate(month).getTime() < readLimit.oldest ? (
+          <NoticeRow
+            tone="warn"
+            icon="message-alert-outline"
+            title={`Only part of ${monthTitle(month)} was read`}
+            body={`Your inbox has more messages than Kharcha reads, so payments before ${shortDay(readLimit.oldest)} ${new Date(readLimit.oldest).getFullYear()} are missing.`}
+          />
+        ) : null}
 
         {/* 1. Saved this month, with money in and money out (design 4a) */}
         <HeroCard
@@ -309,6 +322,17 @@ export default function Home() {
             body="Pick a category so your totals are right."
             pill="Review"
             onPress={() => router.navigate({ pathname: '/activity', params: { filter: 'review' } })}
+          />
+        ) : null}
+
+        {otherShops > 0 ? (
+          <NoticeRow
+            tone="accent"
+            icon="shape-outline"
+            title={`${otherShops} ${otherShops === 1 ? 'shop' : 'shops'} in Other`}
+            body="Pick a category once for each shop. All its payments move."
+            pill="Sort"
+            onPress={() => router.push('/sort')}
           />
         ) : null}
 

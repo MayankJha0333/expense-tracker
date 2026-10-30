@@ -69,6 +69,15 @@ export default function CategoryScreen() {
               {counted.length > 1 ? `, about ${money(average)} each` : ''}
             </Txt>
           </View>
+          {id === 'other' && from === null ? (
+            <NoticeRow
+              tone="accent"
+              icon="shape-outline"
+              title="Sort these by shop"
+              body="Pick a category once for each shop. All its payments move, in every month."
+              onPress={() => router.push('/sort')}
+            />
+          ) : null}
           {id === 'people' && from === null ? (
             <NoticeRow
               tone="info"

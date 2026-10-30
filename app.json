@@ -7,6 +7,14 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0A0A0B",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/cd98ef1d-f8ff-41b7-aabd-1b1b7bc5728a",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "android": {
       "package": "com.mayankjha.kharcha",
       "versionCode": 1004,

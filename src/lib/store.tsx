@@ -14,14 +14,27 @@ import {
 } from './currency';
 import { demoExtras, demoInbox, SAMPLE_DATA_ENABLED, SAMPLE_KINDS, type SampleKind } from './demo';
 import { deviceLocale } from './deviceLocale';
-import { keyOf } from './parser';
-import { pairKey, resolveFlows, type FlowPrefs } from './flows';
-import { processInbox } from './pipeline';
-import { isPurposeId, purpose, purposeKey } from './purposes';
-import { checkSmsPermission, devGlobals, readInbox, requestSmsPermission, type SmsPermission } from './sms';
+import { isPlaceholderName, keyOf } from './parser';
+import { pairKey, resolveFlows } from './flows';
+import { processInbox, withStableIds } from './pipeline';
 import {
-  CREDIT_CATEGORIES,
-  DEBIT_CATEGORIES,
+  applyPrefs,
+  CURRENCY_KEY,
+  EMPTY_PREFS,
+  hasOldIds,
+  LEGACY_KEY,
+  migrateIds,
+  MONTH_START_KEY,
+  prunePrefs,
+  SAMPLE_KEY,
+  STORAGE_KEY,
+  type Prefs,
+} from './prefs';
+import { purpose, purposeKey } from './purposes';
+import { checkSmsPermission, devGlobals, readInbox, requestSmsPermission, usingTestInbox, type SmsPermission } from './sms';
+import { countAfter, fromCache, fromFullRead, mergeRead, needsFullRead, parseCache, readSince, windowStart, type InboxData, type InboxRead, type SmsCache } from './smsCache';
+import { deleteCacheFile, readCacheFile, writeCacheFile } from './smsCacheFile';
+import {
   EMPTY_STATS,
   type CardBill,
   type CategoryId,
@@ -36,63 +49,8 @@ import {
   type TxnType,
 } from './types';
 
-/**
- * Everything you create, saved only in this app's private storage on the phone.
- * Transactions read from SMS are not stored: they are read again from the inbox.
- */
-type Prefs = {
-  /** null until you finish the welcome screen. */
-  source: DataSource | null;
-  /** merchantKey → category. "Always put Swiggy in Food". */
-  rules: Record<string, CategoryId>;
-  /** txn id → category. A one-off change for a single payment. */
-  overrides: Record<string, CategoryId>;
-  /** Payments you said should not count. */
-  excluded: string[];
-  /** Cash expenses and income you added by hand. */
-  manual: Txn[];
-  goals: Goal[];
-  /** Monthly spending limit, or null for none. */
-  budget: number | null;
-  /** Credit card statements you marked as paid (bill ids). */
-  paidBills: string[];
-  /** Card bill payments you looked at and said are fine (Credit cards › Payments to check). */
-  checkedCardPayments: string[];
-  /** Scheduled SIPs with no payment message that you said to ignore (Investments). */
-  ignoredSchedules: string[];
-  /** Links between payments you made by hand (see lib/flows.ts). */
-  links: FlowPrefs['links'];
-  /** Links Kharcha found that you removed. */
-  unlinked: string[];
-  /** Other names your banks use for you. */
-  ownNames: string[];
-  /** merchantKey → what you pay this person for ("cook", "rent"). Comes with a matching rule. */
-  purposes: Record<string, PurposeId>;
-};
+export type { Prefs } from './prefs';
 
-const EMPTY_PREFS: Prefs = {
-  source: null,
-  rules: {},
-  overrides: {},
-  excluded: [],
-  manual: [],
-  goals: [],
-  budget: null,
-  paidBills: [],
-  checkedCardPayments: [],
-  ignoredSchedules: [],
-  links: [],
-  unlinked: [],
-  ownNames: [],
-  purposes: {},
-};
-const STORAGE_KEY = 'kharcha:prefs:v2';
-const LEGACY_KEY = 'kharcha:prefs:v1';
-/** Kept apart from prefs so the choice also holds while you look at sample data. */
-const CURRENCY_KEY = 'kharcha:currency:v1';
-const SAMPLE_KEY = 'kharcha:sample:v1';
-/** The day your month starts on (1-28). */
-const MONTH_START_KEY = 'kharcha:monthStart:v1';
 const AUTO_REFRESH_GAP_MS = 60_000;
 
 export type Status = 'booting' | 'onboarding' | 'loading' | 'ready';
@@ -109,6 +67,9 @@ export type NewEntry = {
   currency?: CurrencyCode;
 };
 export type GoalInput = Pick<Goal, 'name' | 'target' | 'saved' | 'icon' | 'color' | 'deadline'>;
+
+/** Set when the last full read stopped at the message limit: months before [oldest] were not read. */
+export type ReadLimit = { oldest: number | null } | null;
 
 type Store = {
   status: Status;
@@ -129,6 +90,8 @@ type Store = {
   permission: SmsPermission;
   txns: Txn[];
   stats: ScanStats;
+  /** Not null when the inbox had more messages than the app reads (see ReadLimit). */
+  readLimit: ReadLimit;
   month: Month;
   lastSync: number | null;
   error: string | null;
@@ -152,6 +115,10 @@ type Store = {
   refresh: () => Promise<void>;
   requestAccess: () => Promise<SmsPermission>;
   chooseSource: (source: 'manual' | 'demo') => void;
+  /**
+   * Changes a payment's category. With [applyToMerchant], also makes a rule for every payment to that
+   * shop or person, past and future. Never for a made-up name ("UPI payment"): that changes this payment only.
+   */
   setCategory: (txn: Txn, category: CategoryId, applyToMerchant: boolean) => void;
   /** Say what you pay this person for. Moves every payment to them; null clears it. */
   setPurpose: (txn: Txn, purpose: PurposeId | null) => void;
@@ -176,28 +143,6 @@ type Store = {
 
 const StoreContext = createContext<Store | null>(null);
 
-const allowedFor = (t: Txn, c: CategoryId) =>
-  (t.type === 'debit' ? DEBIT_CATEGORIES : CREDIT_CATEGORIES).some((x) => x.id === c);
-
-/** Layer your corrections on top of what the SMS reader guessed. */
-function applyPrefs(auto: Txn[], prefs: Prefs): Txn[] {
-  const excluded = new Set(prefs.excluded);
-  const fromSms = auto.map((t): Txn => {
-    const override = prefs.overrides[t.id];
-    // Money in can have its own rule (from tagging who pays you), else the shop's rule.
-    const rule = (t.type === 'credit' ? prefs.rules[purposeKey(t)] : undefined) ?? prefs.rules[t.merchantKey];
-    const tag = prefs.purposes?.[purposeKey(t)];
-    let next = t;
-    if (override && allowedFor(t, override)) next = { ...t, category: override, categorySource: 'manual' };
-    else if (rule && allowedFor(t, rule)) next = { ...t, category: rule, categorySource: 'rule' };
-    // The tag only shows while the payment is still in the category it gave.
-    if (tag && isPurposeId(tag) && purpose(tag).side === t.type && next.category === purpose(tag).category) next = { ...next, purpose: tag };
-    return excluded.has(t.id) ? { ...next, excluded: true } : next;
-  });
-  const manual = prefs.manual.map((t) => (excluded.has(t.id) ? { ...t, excluded: true } : t));
-  return [...fromSms, ...manual].sort((a, b) => b.timestamp - a.timestamp);
-}
-
 async function loadPrefs(): Promise<{ prefs: Prefs; ok: boolean }> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -214,6 +159,24 @@ async function loadPrefs(): Promise<{ prefs: Prefs; ok: boolean }> {
     // so a one-off read error can't wipe your saved data.
     return { prefs: EMPTY_PREFS, ok: false };
   }
+}
+
+/** Every payment, bill and scheduled payment id the app can see now (for prunePrefs). */
+const knownIds = (d: InboxData) => new Set([...d.txns.map((t) => t.id), ...d.bills.map((b) => b.id), ...d.scheduled.map((s) => s.id)]);
+
+/** The native result → a read with stable ids, plus Android id → stable id for moving old corrections. */
+function toRead(inbox: Awaited<ReturnType<typeof readInbox>>): { read: InboxRead; idMap: Record<string, string> } {
+  const { messages, idMap } = withStableIds(inbox.messages);
+  return {
+    read: {
+      messages,
+      personalSkipped: inbox.personalSkipped ?? 0,
+      promoSkipped: inbox.promoSkipped ?? 0,
+      limitReached: inbox.limitReached === true,
+      oldest: typeof inbox.oldest === 'number' ? inbox.oldest : null,
+    },
+    idMap,
+  };
 }
 
 function demoState(kind: SampleKind) {
@@ -239,6 +202,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [lastSync, setLastSync] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [readLimit, setReadLimit] = useState<ReadLimit>(null);
   const [currencySetting, setCurrencySettingState] = useState<CurrencySetting>('auto');
   const [monthStart, setMonthStartState] = useState(1);
   const locale = useMemo(() => deviceLocale(), []);
@@ -270,30 +234,105 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(saved)).catch(() => {});
   }, [saved]);
 
+  /** The kept bank messages (see lib/smsCache.ts). undefined = not loaded from the file yet. */
+  const cacheRef = useRef<SmsCache | null | undefined>(undefined);
+
+  const showData = useCallback((d: InboxData) => {
+    setAutoTxns(d.txns);
+    setStats(d.stats);
+    setBills(d.bills);
+    setScheduled(d.scheduled);
+    setFunds(d.funds);
+  }, []);
+
+  /**
+   * Goes up whenever the kept messages are thrown away. A read that started before that must not
+   * show or save what it read (Delete all tapped while the inbox was being read).
+   */
+  const epoch = useRef(0);
+
+  /** Forgets the kept bank messages, on the phone and in memory (SMS access turned off, or Delete all). */
+  const dropCache = useCallback(() => {
+    epoch.current += 1;
+    cacheRef.current = null;
+    deleteCacheFile();
+    setReadLimit(null);
+  }, []);
+
+  /**
+   * Reads bank SMS. The first time, the kept messages from last time show straight away; then only
+   * messages newer than the last read are read (or the whole inbox, see needsFullRead).
+   */
   const scan = useCallback(async () => {
     if (busy.current) return;
     busy.current = true;
     setRefreshing(true);
+    const started = epoch.current;
+    const stale = () => epoch.current !== started;
     try {
-      const inbox = await readInbox();
-      // Let the spinner paint before the parsing work starts.
-      await new Promise((r) => setTimeout(r, 0));
-      const { txns, stats: s, bills: b, scheduled: sc, funds: f } = processInbox(inbox.messages, { personal: inbox.personalSkipped });
-      setAutoTxns(txns);
-      setStats(s);
-      setBills(b);
-      setScheduled(sc);
-      setFunds(f);
+      const now = Date.now();
+      if (usingTestInbox()) {
+        // A development build's test inbox: read as it is, never kept.
+        const { read } = toRead(await readInbox(windowStart(now)));
+        if (stale()) return;
+        showData(fromFullRead(read, now).data);
+      } else {
+        if (cacheRef.current === undefined) {
+          const saved = parseCache(await readCacheFile());
+          if (stale()) return;
+          cacheRef.current = saved;
+          if (cacheRef.current) {
+            showData(fromCache(cacheRef.current));
+            setReadLimit(cacheRef.current.limitReached ? { oldest: cacheRef.current.oldest } : null);
+            setStatus('ready');
+          }
+        }
+        const cache = cacheRef.current;
+        const full = needsFullRead(cache, now);
+        const inbox = await readInbox(readSince(cache, now), countAfter(cache, now));
+        // Let the spinner paint before the parsing work starts.
+        await new Promise((r) => setTimeout(r, 0));
+        if (stale()) return;
+        const { read, idMap } = toRead(inbox);
+        let data: InboxData;
+        let next: SmsCache;
+        if (full || !cache) {
+          ({ data, cache: next } = fromFullRead(read, now));
+        } else {
+          next = mergeRead(cache, read, now);
+          data = fromCache(next);
+        }
+        cacheRef.current = next;
+        showData(data);
+        setReadLimit(next.limitReached ? { oldest: next.oldest } : null);
+        // If Delete all comes while this is being written, don't leave the file behind.
+        writeCacheFile(JSON.stringify(next)).then(() => {
+          // Only when nothing newer has been kept since (a later read writes its own file).
+          if (stale() && cacheRef.current === null) deleteCacheFile();
+        });
+        if (full) {
+          // Move corrections from Android's ids to stable ones, then drop those for messages that are
+          // gone. Only after a complete read: a read cut short by the limit would drop real ones.
+          const known = knownIds(data);
+          const complete = !next.limitReached && data.txns.length > 0;
+          setSaved((p) => {
+            let n = Object.keys(idMap).length && hasOldIds(p) ? migrateIds(p, idMap) : p;
+            if (complete) n = prunePrefs(n, known);
+            return JSON.stringify(n) === JSON.stringify(p) ? p : n;
+          });
+        }
+      }
       setLastSync(Date.now());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not read messages');
+      if (!stale()) setError(e instanceof Error ? e.message : 'Could not read messages');
     } finally {
       busy.current = false;
       setRefreshing(false);
-      setStatus('ready');
+      // After Delete all, the welcome screen stays.
+      if (!stale()) setStatus('ready');
     }
-  }, []);
+  }, [showData]);
 
   // Development builds only: lets a test inbox be re-read from the debugger (see scripts/scan-sms.ts).
   useEffect(() => {
@@ -347,14 +386,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (loaded.source !== 'sms') setSaved((x) => ({ ...x, source: 'sms' }));
         setStatus('loading');
         await scan();
-      } else if (loaded.source) {
-        // SMS was turned off in Settings, or you chose manual entry. Home explains.
-        setStatus('ready');
       } else {
-        setStatus('onboarding');
+        // No SMS access: nothing read from SMS may stay on the phone.
+        dropCache();
+        // SMS was turned off in Settings, or you chose manual entry. Home explains.
+        setStatus(loaded.source ? 'ready' : 'onboarding');
       }
     })();
-  }, [scan, startDemo]);
+  }, [scan, startDemo, dropCache]);
 
   // Coming back to the app picks up new bank SMS.
   useEffect(() => {
@@ -362,7 +401,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (state !== 'active' || sourceRef.current === 'demo') return;
       const p = await checkSmsPermission();
       setPermission((prev) => (p === 'denied' && (prev === 'blocked' || prev === 'restricted') ? prev : p));
-      if (p !== 'granted') return;
+      if (p !== 'granted') {
+        if (p !== 'unavailable') dropCache();
+        return;
+      }
       // You may have just allowed SMS in Settings.
       if (sourceRef.current !== 'sms') setSaved((x) => ({ ...x, source: 'sms' }));
       if (statusRef.current === 'onboarding') {
@@ -373,14 +415,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     });
     return () => sub.remove();
-  }, [lastSync, scan]);
+  }, [lastSync, scan, dropCache]);
 
   const refresh = useCallback(async () => {
     if (sourceRef.current === 'demo') return;
     const p = await checkSmsPermission();
     setPermission(p);
     if (p === 'granted') await scan();
-  }, [scan]);
+    else if (p !== 'unavailable') dropCache();
+  }, [scan, dropCache]);
 
   const requestAccess = useCallback(async () => {
     const p = await requestSmsPermission();
@@ -408,12 +451,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAutoTxns([]);
       setStats(EMPTY_STATS);
       setBills([]);
-    setScheduled([]);
-    setFunds([]);
+      setScheduled([]);
+      setFunds([]);
+      // Adding payments by hand only: no SMS is used, so none is kept.
+      dropCache();
       setSaved((x) => ({ ...x, source: 'manual' }));
       setStatus('ready');
     },
-    [startDemo],
+    [startDemo, dropCache],
   );
 
   const setPurpose = useCallback(
@@ -446,7 +491,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { ...x, manual: x.manual.map((t) => (t.id === txn.id ? { ...t, category } : t)) };
         }
         const overrides = { ...x.overrides };
-        if (applyToMerchant && txn.merchantKey) {
+        if (applyToMerchant && txn.merchantKey && !isPlaceholderName(txn.merchant)) {
           delete overrides[txn.id];
           return { ...x, overrides, rules: { ...x.rules, [txn.merchantKey]: category } };
         }
@@ -591,6 +636,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const eraseAll = useCallback(async () => {
     await AsyncStorage.multiRemove([STORAGE_KEY, LEGACY_KEY, CURRENCY_KEY, SAMPLE_KEY, MONTH_START_KEY]).catch(() => {});
+    dropCache();
     setCurrencySettingState('auto');
     applyMonthStart(1);
     setMonthStartState(1);
@@ -606,7 +652,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setError(null);
     setMonth(thisMonth());
     setStatus('onboarding');
-  }, []);
+  }, [dropCache]);
 
   // Your corrections first, then how payments relate (transfers, refunds), then every total.
   const txns = useMemo(
@@ -645,54 +691,103 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const byId = useMemo(() => new Map(txns.map((t) => [t.id, t])), [txns]);
   const find = useCallback((id: string) => byId.get(id), [byId]);
 
-  const value: Store = {
-    status,
-    source,
-    currency,
-    currencySetting,
-    autoCurrency,
-    setCurrencySetting,
-    monthStart,
-    setMonthStart,
-    sample,
-    setSample,
-    permission,
-    txns,
-    stats,
-    month,
-    lastSync,
-    error,
-    refreshing,
-    goals: prefs.goals,
-    budget: prefs.budget,
-    bills,
-    scheduled,
-    funds,
-    paidBills: prefs.paidBills ?? [],
-    checkedCardPayments: prefs.checkedCardPayments ?? [],
-    checkCardPayment,
-    ignoredSchedules: prefs.ignoredSchedules ?? [],
-    ignoreSchedule,
-    setMonth,
-    refresh,
-    requestAccess,
-    chooseSource,
-    setCategory,
-    setPurpose,
-    setExcluded,
-    addEntry,
-    deleteManual,
-    saveGoal,
-    addToGoal,
-    deleteGoal,
-    setBudget,
-    markBillPaid,
-    confirmCategory,
-    linkTxns,
-    unlinkTxns,
-    eraseAll,
-    find,
-  };
+  // One object for every screen, rebuilt only when something in it changes.
+  const value = useMemo<Store>(
+    () => ({
+      status,
+      source,
+      currency,
+      currencySetting,
+      autoCurrency,
+      setCurrencySetting,
+      monthStart,
+      setMonthStart,
+      sample,
+      setSample,
+      permission,
+      txns,
+      stats,
+      readLimit,
+      month,
+      lastSync,
+      error,
+      refreshing,
+      goals: prefs.goals,
+      budget: prefs.budget,
+      bills,
+      scheduled,
+      funds,
+      paidBills: prefs.paidBills ?? [],
+      checkedCardPayments: prefs.checkedCardPayments ?? [],
+      checkCardPayment,
+      ignoredSchedules: prefs.ignoredSchedules ?? [],
+      ignoreSchedule,
+      setMonth,
+      refresh,
+      requestAccess,
+      chooseSource,
+      setCategory,
+      setPurpose,
+      setExcluded,
+      addEntry,
+      deleteManual,
+      saveGoal,
+      addToGoal,
+      deleteGoal,
+      setBudget,
+      markBillPaid,
+      confirmCategory,
+      linkTxns,
+      unlinkTxns,
+      eraseAll,
+      find,
+    }),
+    [
+      status,
+      source,
+      currency,
+      currencySetting,
+      autoCurrency,
+      setCurrencySetting,
+      monthStart,
+      setMonthStart,
+      sample,
+      setSample,
+      permission,
+      txns,
+      stats,
+      readLimit,
+      month,
+      lastSync,
+      error,
+      refreshing,
+      prefs,
+      bills,
+      scheduled,
+      funds,
+      checkCardPayment,
+      ignoreSchedule,
+      setMonth,
+      refresh,
+      requestAccess,
+      chooseSource,
+      setCategory,
+      setPurpose,
+      setExcluded,
+      addEntry,
+      deleteManual,
+      saveGoal,
+      addToGoal,
+      deleteGoal,
+      setBudget,
+      markBillPaid,
+      confirmCategory,
+      linkTxns,
+      unlinkTxns,
+      eraseAll,
+      find,
+    ],
+  );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

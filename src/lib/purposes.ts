@@ -1,3 +1,4 @@
+import { isPlaceholderName } from './parser';
 import type { CategoryId, IconName, PurposeId, Txn, TxnType } from './types';
 
 /*
@@ -59,6 +60,8 @@ export const purposeKey = (t: Pick<Txn, 'type' | 'merchantKey'>) => (t.type === 
 export const canHavePurpose = (t: Txn) =>
   !t.isManual &&
   !!t.merchantKey &&
+  // "Money received", "UPI payment": no person named, so a tag would cover many unrelated payments.
+  !isPlaceholderName(t.merchant) &&
   (t.purpose !== undefined || (t.type === 'debit' ? t.category === 'people' : t.category === 'received'));
 
 /** "Cook" when you tagged the person, else the category name. */

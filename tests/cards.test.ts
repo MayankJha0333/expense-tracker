@@ -1,19 +1,12 @@
-/* Run: npx tsx scripts/test-cards.ts — credit card bills, card payments and where the money went. */
+/* Run: npx vitest run tests/cards.test.ts — credit card bills, card payments and where the money went. */
 import { cardOverview, cardPaymentsToCheck, instrumentKey } from '../src/lib/accounts';
 import { resolveFlows } from '../src/lib/flows';
 import { moneyFlow } from '../src/lib/moneyflow';
 import { processInbox } from '../src/lib/pipeline';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, ok: boolean, detail = '') {
-  if (ok) passed++;
-  else failed++;
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`);
-}
-const eq = (name: string, got: unknown, want: unknown) => check(name, JSON.stringify(got) === JSON.stringify(want), `got=${JSON.stringify(got)} want=${JSON.stringify(want)}`);
+import { check, eq } from './check';
 
-const DAY = 86_400_000;
+
 const at = (m: number, d: number, h = 10) => new Date(2026, m, d, h).getTime();
 let n = 0;
 const sms = (sender: string, body: string, date: number) => ({ id: String(n++), sender, body, date });
@@ -117,5 +110,3 @@ eq('two unknown shops are not paid twice', edgeTx.filter((t) => t.amount === 250
 eq('masked ID not named after a person', edgeTx.find((t) => t.amount === 231)?.merchant === 'Ramesh Kumar', false);
 eq('very short masked ID left alone', edgeTx.find((t) => t.amount === 99)?.merchant, 'UPI payment');
 
-console.log(`${passed} / ${passed + failed} passed`);
-if (failed) process.exit(1);

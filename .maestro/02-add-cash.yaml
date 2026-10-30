@@ -1,0 +1,15 @@
+# Add a cash expense with the + button and see it on Home.
+appId: ${APP_ID || "com.mayankjha.kharcha"}
+---
+- runFlow: 01-start-by-hand.yaml
+- tapOn: "Add a cash expense or income"
+- assertVisible: "Add expense"
+# The amount box has the keyboard when the screen opens.
+- inputText: "250"
+- tapOn: "(Chai|Coffee), .*"
+- inputText: "Maestro chai"
+- hideKeyboard
+- tapOn: "Save expense"
+- extendedWaitUntil:
+    visible: "Maestro chai.*"
+    timeout: 10000

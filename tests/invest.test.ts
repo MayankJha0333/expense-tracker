@@ -1,16 +1,10 @@
-/* Run: npx tsx scripts/test-invest.ts — SIPs, scheduled autopays and fund names. */
+/* Run: npx vitest run tests/invest.test.ts — SIPs, scheduled autopays and fund names. */
 import { investmentOverview } from '../src/lib/investments';
 import { parseFundName, parseScheduledDebit } from '../src/lib/parser';
 import { processInbox } from '../src/lib/pipeline';
 
-let passed = 0;
-let failed = 0;
-const eq = (name: string, got: unknown, want: unknown) => {
-  const ok = JSON.stringify(got) === JSON.stringify(want);
-  if (ok) passed++;
-  else failed++;
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : ` got=${JSON.stringify(got)} want=${JSON.stringify(want)}`}`);
-};
+import { eq } from './check';
+
 
 const at = (m: number, d: number, h = 10) => new Date(2026, m, d, h).getTime();
 let n = 0;
@@ -47,5 +41,3 @@ eq('fund names', r.funds, ['Aditya Birla Sun PSU']);
 const ignored = investmentOverview(r.txns, r.scheduled, r.funds, { year: 2026, month: 9 }, new Set(o.noDebitSeen.map((s) => s.id)), at(9, 29));
 eq('ignored ones are not asked again', ignored.noDebitSeen.length, 0);
 
-console.log(`${passed} / ${passed + failed} passed`);
-if (failed) process.exit(1);

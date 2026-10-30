@@ -202,9 +202,14 @@ export function resolveFlows(txns: Txn[], prefs: FlowPrefs = EMPTY_FLOW_PREFS): 
   // 2. Same money moving between your own accounts: same amount, different account, within days, and a sign it's you.
   type Pair = { out: Txn; inn: Txn; gap: number };
   const pairs: Pair[] = [];
+  // Both lists run oldest first, so the first payment still inside the window only moves forward.
+  // Starting there skips the ones too old to match without looking at each of them again.
+  let lo = 0;
   for (const inn of ins) {
+    while (lo < outs.length && inn.timestamp - outs[lo].timestamp > TRANSFER_WINDOW) lo++;
     if (isLinked(inn) || !IN_CAN_MOVE.has(inn.category) || userPicked(inn)) continue;
-    for (const out of outs) {
+    for (let i = lo; i < outs.length; i++) {
+      const out = outs[i];
       const gap = inn.timestamp - out.timestamp;
       if (gap > TRANSFER_WINDOW) continue;
       if (gap < -EARLY_SLACK) break;
@@ -222,14 +227,17 @@ export function resolveFlows(txns: Txn[], prefs: FlowPrefs = EMPTY_FLOW_PREFS): 
   }
 
   // 3. Refunds back to the purchase they belong to.
+  let refundLo = 0;
   for (const inn of ins) {
+    while (refundLo < outs.length && inn.timestamp - outs[refundLo].timestamp > REFUND_WINDOW) refundLo++;
     if (isLinked(inn) || userPicked(inn) || !inn.rawSms) continue;
     const isRefund = inn.category === 'refund' || REFUND_WORDS.test(inn.rawSms);
     if (!isRefund || (CASHBACK_ONLY.test(inn.rawSms) && !REFUND_WORDS.test(inn.rawSms))) continue;
     const reversal = /\b(revers|chargeback)/i.test(inn.rawSms);
     let best: Txn | null = null;
     let bestScore = -1;
-    for (const out of outs) {
+    for (let i = refundLo; i < outs.length; i++) {
+      const out = outs[i];
       const gap = inn.timestamp - out.timestamp;
       if (gap <= 0) break;
       if (gap > REFUND_WINDOW || out.netted || (out.links ?? []).some((l) => l.kind === 'transfer')) continue;
@@ -254,12 +262,15 @@ export function resolveFlows(txns: Txn[], prefs: FlowPrefs = EMPTY_FLOW_PREFS): 
 
   // 3b. Paid back for something you bought: a company reimbursing a work expense ("Google Play ₹12,493.75" on
   // 28 Aug, "NEFT ₹12,493.75" on 23 Sep). The exact same rupees and paise, not a round number, 1 to 60 days later.
+  let backLo = 0;
   for (const inn of ins) {
+    while (backLo < outs.length && inn.timestamp - outs[backLo].timestamp > REIMBURSE_WINDOW) backLo++;
     // Money from your own name is you moving money, never a pay-back.
     if (isLinked(inn) || userPicked(inn) || inn.category !== 'received' || isOwnName(inn.merchant, me)) continue;
     if (inn.amount < 500 || Math.abs(inn.amount - Math.round(inn.amount)) < CENT) continue;
     let best: Txn | null = null;
-    for (const out of outs) {
+    for (let i = backLo; i < outs.length; i++) {
+      const out = outs[i];
       const gap = inn.timestamp - out.timestamp;
       if (gap <= DAY) break;
       if (gap > REIMBURSE_WINDOW || isLinked(out) || out.netted || !cat(out.category).countsAsSpend) continue;

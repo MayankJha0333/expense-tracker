@@ -1,0 +1,5 @@
+# Maestro tap-through tests (npm run e2e). Needs an emulator or phone with a build of the app
+# installed and Maestro (https://maestro.dev). For the development build:
+#   maestro test -e APP_ID=com.mayankjha.kharcha.dev .maestro
+flows:
+  - "0*.yaml"

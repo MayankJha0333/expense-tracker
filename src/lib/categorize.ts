@@ -20,7 +20,7 @@ const KEYWORDS: [CategoryId, string[]][] = [
   ['groceries', [
     'blinkit', 'zepto', 'instamart', 'bigbasket', 'bbnow', 'dmart', 'avenue supermarts', 'jiomart',
     'grofers', 'reliance fresh', 'smart bazaar', 'smartbazaar', 'naturesbasket', 'spencer', 'milkbasket',
-    'country delight', 'licious', 'freshtohome', 'kirana', 'supermarket', 'grocery', 'groceries',
+    'spencers', 'country delight', 'licious', 'freshtohome', 'kirana', 'supermarket', 'grocery', 'groceries',
     'provision', 'dunzo', 'swiggy genie', 'trader joe', 'whole foods', 'wholefds', 'safeway', 'kroger',
     'costco', 'aldi', 'wegmans', 'instacart', 'publix', 'sprouts',
   ]],
@@ -86,7 +86,7 @@ const KEYWORDS: [CategoryId, string[]][] = [
   ['shopping', [
     'amazon', 'amzn', 'flipkart', 'myntra', 'ajio', 'meesho', 'nykaa', 'tatacliq', 'tata cliq', 'croma',
     'reliance digital', 'vijay sales', 'decathlon', 'ikea', 'lenskart', 'firstcry', 'snapdeal',
-    'footwear', 'luggage', 'shoppers stop', 'lifestyle', 'westside', 'zara', 'uniqlo', 'pantaloons', 'max fashion', 'trends',
+    'footwear', 'shoes', 'luggage', 'shoppers stop', 'lifestyle', 'westside', 'zara', 'uniqlo', 'pantaloons', 'max fashion', 'trends',
     'boat', 'mall', 'store', 'mart', 'shop', 'fashion', 'target', 'walmart', 'best buy', 'bestbuy', 'macys',
     'nordstrom', 'home depot', 'etsy', 'ebay',
   ]],
@@ -97,8 +97,10 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 type Matcher = { category: CategoryId; long: string[]; short: RegExp | null };
 
 /**
- * Long keywords (5+ letters) match anywhere in the squashed name ("swiggyinstamart").
- * Short ones need word edges, so "ola" does not match "Coca Cola".
+ * Long keywords (5+ letters) match anywhere in a squashed ID ("swiggyinstamart", "zomatoltd32").
+ * In a name with spaces they must start where a word starts: "Avenuesupermartsltd 27325" and
+ * "Swiggy Instamart" match, but "hospital" no longer hides inside "Amuktha Hospitality"-style
+ * middles of words. Short ones need word edges, so "ola" does not match "Coca Cola".
  */
 const MATCHERS: Matcher[] = KEYWORDS.map(([category, words]) => {
   const long = words.filter((w) => keyOf(w).length >= 5).map(keyOf);
@@ -106,6 +108,57 @@ const MATCHERS: Matcher[] = KEYWORDS.map(([category, words]) => {
   const short = shortWords.length ? new RegExp(`\\b(${shortWords.map(escape).join('|')})\\b`, 'i') : null;
   return { category, long, short };
 });
+
+/**
+ * Words that say what a place is more clearly than any brand word next to them, checked first:
+ * "District Hospital" is a hospital, "Kitchen World Appliances" sells appliances.
+ */
+const PLACE_WORDS: [CategoryId, RegExp][] = [
+  ['health', /\b(?:hospitals?|clinics?|pharmacy|chemists?|diagnostics?)\b/i],
+  ['shopping', /\b(?:appliances|furniture|electronics|electricals|hardware|utensils|footwear|shoes)\b/i],
+];
+
+/**
+ * Brand names that are also everyday words or first names. In a name with spaces they count only
+ * next to these words: "District by Zomato" yes, "District Court" no; "Spencer's Retail" yes, "Spencer Dsouza" no.
+ */
+const SPENCER = ['spencers', 'retail', 'retails', 'hyper', 'daily', 'plaza', 'supermarket', 'smart'];
+const BRAND_ONLY: Record<string, ReadonlySet<string>> = {
+  district: new Set(['by', 'zomato', 'app', 'movies', 'tickets', 'dining']),
+  steam: new Set(['games', 'powered', 'store', 'valve', 'wallet', 'purchase']),
+  spencer: new Set(SPENCER),
+  spencers: new Set(SPENCER),
+};
+
+/** Parts of web addresses and company endings, not words that say what a place is ("WWW.STEAMPOWERED.COM"). */
+const FILLER: ReadonlySet<string> = new Set(['www', 'com', 'in', 'net', 'org', 'co', 'ltd', 'limited', 'pvt', 'private', 'inc', 'llp']);
+
+type NameParts = { key: string; words: string[]; starts: Set<number> };
+
+function nameParts(merchant: string): NameParts {
+  // Order numbers ("27325") are not words.
+  const words = merchant.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !/^\d+$/.test(w));
+  const starts = new Set<number>();
+  let at = 0;
+  for (const w of words) {
+    starts.add(at);
+    at += w.length;
+  }
+  return { key: words.join(''), words, starts };
+}
+
+function longHit(w: string, n: NameParts): boolean {
+  if (n.words.length <= 1) {
+    if (!n.key.includes(w)) return false;
+  } else {
+    let hit = false;
+    for (let i = n.key.indexOf(w); i !== -1 && !hit; i = n.key.indexOf(w, i + 1)) hit = n.starts.has(i);
+    if (!hit) return false;
+  }
+  const allowed = BRAND_ONLY[w];
+  if (!allowed || n.words.length <= 1) return true;
+  return n.words.every((x) => x.startsWith(w) || allowed.has(x) || FILLER.has(x));
+}
 
 const CARD_BILL =
   /(credit ?card|card ?bill|cc bill).{0,60}?(payment|bill|towards|received)|(payment|bill|towards).{0,60}?(credit ?card)|\bcardmember\b.{0,40}?\bpayment\b|\bpayment\b.{0,80}?\bcredited to your card\b/i;
@@ -129,9 +182,10 @@ const BODY_HINTS: [RegExp, CategoryId][] = [
 /** Match only on the merchant text. Returns null when nothing fits. */
 export function categoryFromMerchant(merchant: string): CategoryId | null {
   const lower = merchant.toLowerCase();
-  const key = keyOf(merchant);
+  for (const [category, rx] of PLACE_WORDS) if (rx.test(lower)) return category;
+  const parts = nameParts(merchant);
   for (const m of MATCHERS) {
-    if (m.long.some((w) => key.includes(w))) return m.category;
+    if (m.long.some((w) => longHit(w, parts))) return m.category;
     if (m.short?.test(lower)) return m.category;
   }
   return null;

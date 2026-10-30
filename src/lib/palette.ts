@@ -1,6 +1,6 @@
 /*
  * Kharcha design tokens: colours, shadows and the saved theme choice.
- * Pure data and maths (no React Native imports) so scripts/test-tracking.ts can
+ * Pure data and maths (no React Native imports) so tests/tracking.test.ts can
  * check every theme for readable contrast.
  *
  * Two families, one per mode:

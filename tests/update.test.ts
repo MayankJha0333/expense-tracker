@@ -1,14 +1,8 @@
-/* Run: npx tsx scripts/test-update.ts — the rule that decides when an update is required. */
+/* Run: npx vitest run tests/update.test.ts — the rule that decides when an update is required. */
 import { majorOf, toVersionCode, updateKind } from '../src/lib/versionRule';
 
-let pass = 0;
-let fail = 0;
-function eq(name: string, got: unknown, want: unknown) {
-  const ok = JSON.stringify(got) === JSON.stringify(want);
-  if (ok) pass++;
-  else fail++;
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : `  → got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`}`);
-}
+import { eq } from './check';
+
 
 eq('1001 is major 1', majorOf(1001), 1);
 eq('2001 is major 2', majorOf(2001), 2);
@@ -31,5 +25,3 @@ eq('empty → null', toVersionCode(''), null);
 eq('null → null', toVersionCode(null), null);
 eq('0 → null', toVersionCode(0), null);
 
-console.log(`\n${pass} / ${pass + fail} passed`);
-if (fail) process.exit(1);

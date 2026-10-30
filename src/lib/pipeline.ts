@@ -126,6 +126,66 @@ function nameMaskedPayments(kept: Txn[]) {
   }
 }
 
+/* ---------- ids that survive a new phone ---------- */
+
+/** cyrb53: a fast 53-bit string hash (not for security, just for telling messages apart). */
+function hash53(text: string): number {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+
+/**
+ * An id for a message made from who sent it, when (to the second) and what it says.
+ * Android's own row number changes when SMS move to a new phone or a backup is restored,
+ * which would lose every correction tied to it. This one stays the same.
+ * Starts with "h", so it can never be mistaken for Android's numeric id.
+ */
+export function stableSmsId(sms: Pick<RawSms, 'sender' | 'date' | 'body'>): string {
+  return `h${hash53(`${sms.sender.trim()}|${Math.floor(sms.date / 1000)}|${sms.body}`).toString(36)}`;
+}
+
+/** Gives every message its stable id. `idMap` is Android id → stable id, used once to move old corrections over. */
+export function withStableIds(messages: RawSms[]): { messages: RawSms[]; idMap: Record<string, string> } {
+  const idMap: Record<string, string> = {};
+  const out = messages.map((m) => {
+    if (m.id.startsWith('h')) return m;
+    const id = stableSmsId(m);
+    idMap[m.id] = id;
+    return { ...m, id };
+  });
+  return { messages: out, idMap };
+}
+
+/**
+ * True when a message adds something to the app: a payment, a credit card bill or statement notice,
+ * or a payment the bank says it will take. Only these are kept between starts (see lib/smsCache.ts);
+ * OTPs, offers and everything else are not. Mirrors the checks in processInbox, so the kept messages
+ * alone give exactly the same payments, bills and scheduled payments as the whole inbox.
+ * Fund names are kept on their own, because they come from OTP messages.
+ */
+export function isRelevant(sms: RawSms): boolean {
+  if (parseScheduledDebit(sms)) return true;
+  const r = parseSms(sms);
+  if (r.ok) return true;
+  if (r.reason === 'reminder' || r.reason === 'promo' || r.reason === 'not_transaction') return parseCardNotice(sms) !== null;
+  return false;
+}
+
+/** Why a message was skipped, or null when it is kept. Used to count what new messages were. */
+export function skipReason(sms: RawSms): SkipReason | null {
+  if (isRelevant(sms)) return null;
+  const r = parseSms(sms);
+  return r.ok ? null : r.reason;
+}
+
 /** Raw inbox → clean list of transactions, credit card bills, and counts of what was skipped. */
 export function processInbox(messages: RawSms[], extraSkipped: Partial<Record<SkipReason, number>> = {}) {
   const skipped: Partial<Record<SkipReason, number>> = { ...extraSkipped };

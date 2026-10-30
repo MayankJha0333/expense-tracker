@@ -12,6 +12,7 @@
     "expo-application": "~58.1.2",
     "expo-constants": "~58.0.13",
     "expo-dev-client": "~58.0.15",
+    "expo-file-system": "~58.0.11",
     "expo-font": "~58.0.10",
     "expo-haptics": "~58.0.7",
     "expo-in-app-updates": "^0.13.0",
@@ -19,6 +20,7 @@
     "expo-router": "~58.0.26",
     "expo-status-bar": "~58.0.4",
     "expo-system-ui": "~58.0.6",
+    "expo-updates": "~58.0.18",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.0",
@@ -33,7 +35,8 @@
     "@types/react": "~19.3.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~58.0.4",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
   },
   "scripts": {
     "start": "expo start",
@@ -41,11 +44,10 @@
     "build:playstore": "npx eas-cli@latest build --platform android --profile production",
     "prebuild": "expo prebuild --platform android",
     "typecheck": "tsc --noEmit",
-    "test:parser": "npx tsx scripts/test-parser.ts",
-    "test:tracking": "npx tsx scripts/test-tracking.ts",
-    "test:currency": "npx tsx scripts/test-currency.ts",
-    "test": "npx tsx scripts/test-parser.ts && npx tsx scripts/test-tracking.ts && npx tsx scripts/test-currency.ts && npx tsx scripts/test-update.ts && npx tsx scripts/test-flows.ts && npx tsx scripts/test-month.ts && npx tsx scripts/test-cards.ts && npx tsx scripts/test-invest.ts",
-    "test:update": "npx tsx scripts/test-update.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "golden": "npx tsx scripts/golden.ts",
+    "e2e": "maestro test .maestro",
     "check:version": "npx tsx scripts/check-version.ts",
     "release:patch": "npx tsx scripts/bump-version.ts patch --push",
     "release:minor": "npx tsx scripts/bump-version.ts minor --push",
@@ -55,10 +57,15 @@
     "web": "expo start --web",
     "privacy:md": "npx tsx scripts/privacy-md.ts",
     "scan:sms": "npx tsx scripts/scan-sms.ts",
-    "test:flows": "npx tsx scripts/test-flows.ts",
-    "test:month": "npx tsx scripts/test-month.ts",
-    "test:cards": "npx tsx scripts/test-cards.ts",
-    "test:invest": "npx tsx scripts/test-invest.ts"
+    "test:parser": "vitest run tests/parser.test.ts",
+    "test:tracking": "vitest run tests/tracking.test.ts",
+    "test:currency": "vitest run tests/currency.test.ts",
+    "test:update": "vitest run tests/update.test.ts",
+    "test:flows": "vitest run tests/flows.test.ts",
+    "test:month": "vitest run tests/month.test.ts",
+    "test:cards": "vitest run tests/cards.test.ts",
+    "test:invest": "vitest run tests/invest.test.ts",
+    "update:production": "npx eas-cli@latest update --channel production --environment production --platform android"
   },
   "private": true
 }

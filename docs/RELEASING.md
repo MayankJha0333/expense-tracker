@@ -41,6 +41,25 @@ The workflow sends the build to **Internal testing** as a **draft** (`"releaseSt
 
 To skip step 1, set `"releaseStatus": "completed"` in `eas.json`; internal builds then go live by themselves.
 
+## Quick fixes with EAS Update (no Play build)
+
+`expo-updates` is in the app. Each time Kharcha starts it asks Expo's update service (`updates.url` in `app.json`) for a newer JavaScript bundle on its channel, downloads it in the background and uses it on the next start (`checkAutomatically: ON_LOAD`, `fallbackToCacheTimeout: 0`, so start-up never waits). There is no switch to turn it off; the privacy policy says so.
+
+**What can go out as a quick fix:** anything in JavaScript or TypeScript (parser, keywords, screens, text, images bundled with JS).
+**What can't:** the Kotlin SMS module, a new library with native code, permissions, `app.json` changes, the app icon. Those need `npm run release:patch` and a Play rollout.
+
+```
+npm run typecheck && npm run lint && npm test     # same checks as CI
+npm run update:production -- --message "Fix HDFC card alerts"
+```
+
+- Channels: each EAS build profile has one (`eas.json`): `production`, `preview`, `development`. Play Store builds listen on `production`.
+- `runtimeVersion` uses the `fingerprint` policy: EAS works out a fingerprint of the native code. An update only goes to builds with the same fingerprint, so a JS update can never land on a build whose native code doesn't match it. If `eas update` says no build matches, the native code changed since the last Play build: ship a Play release instead.
+- The first quick fix can only reach builds made after `expo-updates` was added (1.0.4 and later).
+- To undo a bad update: `npx eas-cli@latest update:rollback` and pick "embedded" (everyone goes back to the code in their Play build) or a previous update. Or publish a fixed update.
+- Google Play allows this for JavaScript (code run by an interpreter), but keep quick fixes to fixes and small changes. New features that change what the app does with SMS should go through a Play release, so they are reviewed.
+- Quick fixes still go through the version gate: a forced update (major version) is decided only by Play builds (`versionCode`), never by an EAS update.
+
 ## Build numbers (read this before every Play upload)
 
 Android's build number (`versionCode` in `app.json`) carries the major version:

@@ -1,4 +1,4 @@
-/* Run: npx tsx scripts/test-currency.ts — currencies: reading them from SMS, formatting, totals, and edge cases. */
+/* Run: npx vitest run tests/currency.test.ts — currencies: reading them from SMS, formatting, totals, and edge cases. */
 import { cardDues, notCountedIncome } from '../src/lib/accounts';
 import { shortDay, summarize, monthOf } from '../src/lib/analytics';
 import {
@@ -17,14 +17,8 @@ import { parseCardBill, parseSms, type RawSms } from '../src/lib/parser';
 import { processInbox } from '../src/lib/pipeline';
 import { countsAsSpend, type CardBill, type Txn } from '../src/lib/types';
 
-let pass = 0;
-let fail = 0;
-function check(name: string, ok: boolean, detail = '') {
-  if (ok) pass++;
-  else fail++;
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok || !detail ? '' : `  → ${detail}`}`);
-}
-const eq = (name: string, got: unknown, want: unknown) => check(name, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+import { check, eq } from './check';
+
 
 const NOW = new Date(2026, 9, 28, 12).getTime();
 const sms = (sender: string, body: string, date = NOW): RawSms => ({ id: String(Math.random()), sender, body, date });
@@ -171,5 +165,3 @@ const goal = { id: 'g', name: 'x', target: 1000, saved: 100, icon: 'star' as con
 check('a goal whose date has passed says so', /date passed/.test(goalPlan({ ...goal, deadline: Date.now() - 40 * 86_400_000 })));
 eq('an overfilled goal is "Reached"', goalPlan({ ...goal, saved: 2500, deadline: null }), 'Reached. Well done!');
 
-console.log(`\n${pass} / ${pass + fail} passed`);
-if (fail > 0) process.exit(1);

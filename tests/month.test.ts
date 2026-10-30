@@ -2,14 +2,8 @@
 import { cashflow, dayOfMonth, daysInMonth, monthName, monthOf, monthRange, monthTitle, setMonthStart, summarize, type Month } from '../src/lib/analytics';
 import type { Txn } from '../src/lib/types';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, ok: boolean, detail = '') {
-  if (ok) passed++;
-  else failed++;
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`);
-}
-const eq = (name: string, got: unknown, want: unknown) => check(name, JSON.stringify(got) === JSON.stringify(want), `got=${JSON.stringify(got)} want=${JSON.stringify(want)}`);
+import { eq } from './check';
+
 
 const at = (y: number, m: number, d: number, h = 12) => new Date(y, m, d, h).getTime();
 const oct: Month = { year: 2026, month: 9 };
@@ -52,5 +46,3 @@ eq('31 is clamped to 28', monthOf(at(2026, 9, 27)), { year: 2026, month: 8 });
 setMonthStart(0);
 eq('0 is clamped to 1', monthOf(at(2026, 9, 1, 0)), oct);
 
-console.log(`${passed} / ${passed + failed} passed`);
-if (failed) process.exit(1);

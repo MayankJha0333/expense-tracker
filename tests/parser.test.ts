@@ -1,9 +1,9 @@
-/* Run: npx tsx scripts/test-parser.ts — checks the SMS reader on real-looking bank messages. */
+/* Run: npx vitest run tests/parser.test.ts — checks the SMS reader on real-looking bank messages. */
 import { categorize } from '../src/lib/categorize';
-import { money, moneyCompact } from '../src/lib/money';
 import { parseSms } from '../src/lib/parser';
 import { processInbox } from '../src/lib/pipeline';
-import { summarize, thisMonth } from '../src/lib/analytics';
+
+import { check } from './check';
 
 // [sender, body, expected]  expected = "skip <reason>" or "<type> <amount> <merchant|*> <category> <mode> <account|->"
 const CASES: [string, string, string][] = [
@@ -73,7 +73,6 @@ const CASES: [string, string, string][] = [
   ['JD-SBIUPI-S', 'Dear UPI user A/C X1346 debited by 5000.00 on date 11Jun26 trf to Indian Clearing Refno 109993668710 If not u? call-1800111109 for other services-18001234-SBI', 'debit 5000 Indian Clearing investments upi 1346'],
 ];
 
-let pass = 0;
 CASES.forEach(([sender, body, expect], i) => {
   const r = parseSms({ id: String(i), sender, body, date: 0 });
   const got = r.ok
@@ -92,17 +91,10 @@ CASES.forEach(([sender, body, expect], i) => {
       g.slice(-3).join(' ') === exp.slice(-3).join(' ') &&
       (expMerchant === '*' || expMerchant === merchant);
   }
-  if (ok) pass++;
-  console.log(`${ok ? 'PASS' : 'FAIL'} #${i} got=[${got}]${ok ? '' : `  expected=[${expect}]`}`);
+  check(`#${i} ${expect}`, ok, `got=[${got}]`);
 });
-console.log(`\n${pass} / ${CASES.length} passed`);
 
 const now = Date.now();
-const { txns, stats } = processInbox(CASES.map(([sender, body], i) => ({ id: String(i), sender, body, date: now - i * 3_600_000 })));
-console.log('pipeline', stats);
-const s = summarize(txns, thisMonth());
-console.log('spent', money(s.spent), 'received', money(s.received), s.byCategory.map((c) => `${c.category}:${money(c.amount)}`).join(' '));
-console.log(money(1234567), money(999.5, { decimals: true }), moneyCompact(152000), moneyCompact(45230));
 // One card bill payment confirmed twice by the same bank, two days apart, counts once.
 // The same amount paid again next month is a new payment.
 const DAY = 86_400_000;
@@ -113,5 +105,4 @@ const repeat = processInbox([
 ]);
 const billsKept = repeat.txns.filter((t) => t.category === 'card_bill').length;
 const billOk = billsKept === 2;
-console.log(`${billOk ? 'PASS' : 'FAIL'} repeated card bill alert counts once (kept ${billsKept} of 3; next month's stays)`);
-if (pass !== CASES.length || !billOk) process.exit(1);
+check('repeated card bill alert counts once; next month\'s stays', billOk, `kept ${billsKept} of 3`);

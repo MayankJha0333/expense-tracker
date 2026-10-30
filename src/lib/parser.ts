@@ -7,6 +7,14 @@ import {
 } from './currency';
 import type { CardBill, PayMode, ScheduledDebit, SkipReason, TxnType } from './types';
 
+/**
+ * Raise this when a change makes the reader keep messages it used to skip (a new bank, a new
+ * kind of alert). The app keeps only the messages it used, so it then reads the whole inbox again.
+ * Changes to how a kept message is read (names, categories, amounts) don't need it: kept
+ * messages are read again with the new code on every start.
+ */
+export const PARSER_VERSION = 1;
+
 /** One SMS as it comes from the phone's inbox. */
 export type RawSms = { id: string; sender: string; body: string; date: number };
 
@@ -166,8 +174,17 @@ const PAYROLL_SUFFIX = /\s+(salary|sal|payroll|wages)$/i;
 
 // ---------- helpers ----------
 
+// One global copy per pattern, made once: building a RegExp for every message adds up over 8,000 SMS.
+const GLOBAL_COPIES = new WeakMap<RegExp, RegExp>();
+
 function* matchAll(rx: RegExp, text: string): Generator<RegExpExecArray> {
-  const g = new RegExp(rx.source, rx.flags.includes('g') ? rx.flags : rx.flags + 'g');
+  let g = GLOBAL_COPIES.get(rx);
+  if (!g) {
+    g = new RegExp(rx.source, rx.flags.includes('g') ? rx.flags : rx.flags + 'g');
+    GLOBAL_COPIES.set(rx, g);
+  }
+  // A shared copy keeps its position between calls; start every search from the beginning.
+  g.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = g.exec(text)) !== null) {
     yield m;
@@ -367,6 +384,14 @@ function fallbackName(type: TxnType, mode: PayMode, bank: string | null): string
   if (bank) return `${bank} debit`;
   return 'Payment';
 }
+
+/**
+ * Names Kharcha made up because the SMS named no shop or person ("UPI payment", "HDFC Bank debit").
+ * Many unrelated payments share them, so a rule ("always put X in Food") must never be made from one.
+ */
+const PLACEHOLDER_NAME =
+  /^(?:upi payment|card payment|payment|payment reversed|money received|cash deposit|atm withdrawal|(?:.+ )?qr payment|.+ debit|credit to .+|.+ card bill paid)$/i;
+export const isPlaceholderName = (name: string) => PLACEHOLDER_NAME.test(name.trim());
 
 export function normalize(body: string): string {
   return body.replace(/\s+/g, ' ').trim();

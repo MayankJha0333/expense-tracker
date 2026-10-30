@@ -41,7 +41,7 @@ export async function requestSmsPermission(): Promise<SmsPermission> {
   const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_SMS, {
     title: 'Read your bank SMS',
     message:
-      'Kharcha reads bank and card alerts on this phone to track your spending. OTPs, offers and chats are skipped. Nothing is uploaded: Kharcha has no server.',
+      'Kharcha reads bank and card alerts on this phone to track your spending. OTPs, offers and chats are skipped. Nothing you track is uploaded.',
     buttonPositive: 'Continue',
     buttonNegative: 'Not now',
   });
@@ -54,20 +54,24 @@ export async function requestSmsPermission(): Promise<SmsPermission> {
 /** Opens this app's page in Android Settings (App info). */
 export const openAppSettings = () => Linking.openSettings();
 
-const MONTHS_BACK = 13;
+/** At most this many messages per read, after personal numbers and offers are dropped (see the native module). */
 const MAX_MESSAGES = 8000;
 
-/** Reads about the last 13 months of inbox messages from non-personal senders. */
 /** Development builds only: a test inbox put here by hand stands in for the phone's SMS. See scripts/scan-sms.ts. */
 type DevGlobals = { __KHARCHA_TEST_INBOX__?: InboxResult; __KHARCHA_RESCAN__?: () => Promise<void> };
 export const devGlobals = globalThis as DevGlobals;
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
-export async function readInbox(): Promise<InboxResult> {
+/** True when a development build is using a test inbox instead of the phone's SMS (never cached). */
+export const usingTestInbox = () => isDev && !!devGlobals.__KHARCHA_TEST_INBOX__;
+
+/**
+ * Inbox messages from non-personal senders that arrived on or after [sinceMs]. Skipped personal and
+ * promotional messages are counted only when newer than [countAfterMs], so an overlapping read
+ * doesn't count them twice.
+ */
+export async function readInbox(sinceMs: number, countAfterMs = 0): Promise<InboxResult> {
   if (isDev && devGlobals.__KHARCHA_TEST_INBOX__) return devGlobals.__KHARCHA_TEST_INBOX__;
   if (!SmsReader) throw new Error('SMS reader is not in this build');
-  const since = new Date();
-  since.setMonth(since.getMonth() - MONTHS_BACK, 1);
-  since.setHours(0, 0, 0, 0);
-  return SmsReader.readInboxAsync(since.getTime(), MAX_MESSAGES);
+  return SmsReader.readInboxAsync(sinceMs, MAX_MESSAGES, countAfterMs);
 }

@@ -1,4 +1,4 @@
-/* Run: npx tsx scripts/test-tracking.ts — checks card bills, payment methods, accounts, review rules and theme contrast. */
+/* Run: npx vitest run tests/tracking.test.ts — checks card bills, payment methods, accounts, review rules and theme contrast. */
 import {
   cardDues,
   creditCardKeys,
@@ -19,13 +19,8 @@ import { parseCardBill, parseSms } from '../src/lib/parser';
 import { processInbox } from '../src/lib/pipeline';
 import type { CardBill, Txn } from '../src/lib/types';
 
-let pass = 0;
-let fail = 0;
-function check(name: string, ok: boolean, detail = '') {
-  if (ok) pass++;
-  else fail++;
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok || !detail ? '' : `  → ${detail}`}`);
-}
+import { check } from './check';
+
 const ymd = (ts: number | null) => {
   if (ts === null) return 'null';
   const d = new Date(ts);
@@ -299,5 +294,3 @@ check('nothing saved → Auto', parseSavedTheme(null).mode === 'system');
 
 check('card name is shortened for the bill row', shortCardName('HDFC Bank credit card ••7788') === 'HDFC ••7788' && shortCardName('SBI Card credit card ••1234') === 'SBI Card ••1234' && shortCardName('OneCard ••5555') === 'OneCard ••5555', shortCardName('HDFC Bank credit card ••7788'));
 
-console.log(`\n${pass} / ${pass + fail} passed`);
-if (fail > 0) process.exit(1);

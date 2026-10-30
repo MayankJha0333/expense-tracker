@@ -31,11 +31,12 @@ const INSTALL_LABEL: Record<string, string> = {
 };
 
 const BY_DESIGN: { icon: IconName; text: string }[] = [
-  { icon: 'account-off-outline', text: 'No account, no sign-up, no server' },
+  { icon: 'account-off-outline', text: 'No account, no sign-up, no server of our own' },
   { icon: 'radar', text: 'No analytics, ads, crash reporting or trackers' },
-  { icon: 'format-font', text: 'Fonts and icons are built in, nothing is downloaded' },
+  { icon: 'format-font', text: 'Fonts and icons are built in, not downloaded' },
   { icon: 'cloud-off-outline', text: 'Android cloud backup is turned off' },
   { icon: 'message-lock-outline', text: 'Chats from people are dropped before the app reads them' },
+  { icon: 'update', text: "App fixes come from Expo's update service, which never gets your data" },
 ];
 
 export default function Settings() {
@@ -50,7 +51,7 @@ export default function Settings() {
   const confirmErase = () => {
     Alert.alert(
       'Delete all your data?',
-      'This removes your cash entries, goals, budget, category rules and choices from this phone. Your SMS inbox is not touched. This cannot be undone.',
+      'This removes your cash entries, goals, budget, category rules, choices and the saved bank alerts from this phone. Your SMS inbox is not touched. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -92,7 +93,7 @@ export default function Settings() {
               Your data stays on this phone
             </Txt>
             <Txt variant="small" color={p.cardMuted}>
-              No account and no server. Nothing you track is uploaded.
+              No account and no server of our own. Nothing you track is uploaded.
             </Txt>
           </View>
         </View>
@@ -157,7 +158,7 @@ export default function Settings() {
             <Count value={budget ? 1 : 0} label="budget" />
           </View>
           <Txt variant="small" color={p.muted}>
-            Payments from SMS are not saved; they are read again from your inbox. Deleting removes only what Kharcha saved.
+            Kharcha also keeps the bank alerts it uses, so it opens faster. Deleting removes them and everything else Kharcha saved. Your SMS inbox is never touched.
           </Txt>
           <Button label="Delete all my data" kind="danger" icon="trash-can-outline" onPress={confirmErase} />
         </Card>

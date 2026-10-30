@@ -13,6 +13,7 @@ import { cardDues, needsReview, payLabel } from '../../lib/accounts';
 import { dayLabel, shortDay, timeLabel } from '../../lib/analytics';
 import { CURRENCIES, currencyOf, getHomeCurrency } from '../../lib/currency';
 import { money } from '../../lib/money';
+import { isPlaceholderName } from '../../lib/parser';
 import { canHavePurpose, kindLabel } from '../../lib/purposes';
 import { useStore } from '../../lib/store';
 import { cat, CREDIT_CATEGORIES, DEBIT_CATEGORIES, isForeign, PAY_MODE_LABEL, shownAmount, type CategoryId, type Txn } from '../../lib/types';
@@ -49,6 +50,9 @@ export default function TxnDetail() {
   const c = cat(txn.category);
   const credit = txn.type === 'credit';
   const options = credit ? CREDIT_CATEGORIES : DEBIT_CATEGORIES;
+  // "UPI payment", "HDFC Bank debit": made up because the SMS named no one, so shared by many unrelated payments.
+  const placeholder = isPlaceholderName(txn.merchant);
+  const canApplyToAll = !txn.isManual && !placeholder;
   const sameShop = txns.filter((t) => t.merchantKey === txn.merchantKey && t.id !== txn.id && !t.isManual).length;
   const samePerson = txns.filter((t) => t.merchantKey === txn.merchantKey && t.type === txn.type && t.id !== txn.id && !t.isManual).length;
   const notCountable = !credit && !c.countsAsSpend;
@@ -57,7 +61,7 @@ export default function TxnDetail() {
   const pick = (next: CategoryId) => {
     if (next === txn.category) return;
     Haptics.selectionAsync().catch(() => {});
-    setCategory(txn, next, applyToAll && !txn.isManual);
+    setCategory(txn, next, applyToAll && canApplyToAll);
   };
 
   const details: [string, string][] = [
@@ -223,16 +227,22 @@ export default function TxnDetail() {
             <Chip key={o.id} label={o.label} icon={o.icon} color={o.color} selected={o.id === txn.category} onPress={() => pick(o.id)} />
           ))}
         </View>
-        {!txn.isManual && sameShop > 0 ? (
+        {canApplyToAll ? (
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
               <Txt variant="bodyStrong">Use for all {txn.merchant} payments</Txt>
               <Txt variant="small" color={p.muted}>
-                Also changes {sameShop} other {sameShop === 1 ? 'payment' : 'payments'}, and new ones from now on.
+                {sameShop > 0
+                  ? `Also changes ${sameShop} other ${sameShop === 1 ? 'payment' : 'payments'}, and new ones from now on.`
+                  : 'New payments to them go to the same category.'}
               </Txt>
             </View>
             <Switch value={applyToAll} onValueChange={setApplyToAll} trackColor={{ true: p.accent, false: p.line }} thumbColor={p.surface} />
           </View>
+        ) : placeholder ? (
+          <Txt variant="small" color={p.muted}>
+            The message didn&apos;t name the shop, so a change here applies to this payment only.
+          </Txt>
         ) : null}
       </View>
 

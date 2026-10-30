@@ -1,7 +1,9 @@
-/* Run: npx tsx scripts/test-flows.ts — checks how related payments are linked (lib/flows.ts). */
+/* Run: npx vitest run tests/flows.test.ts — checks how related payments are linked (lib/flows.ts). */
 import { summarize, monthOf } from '../src/lib/analytics';
 import { linkCandidates, pairKey, resolveFlows, type FlowPrefs } from '../src/lib/flows';
 import { countsAsIncome, countsAsSpend, type CategoryId, type PayMode, type Txn } from '../src/lib/types';
+
+import { check } from './check';
 
 const DAY = 86_400_000;
 const T0 = new Date(2026, 9, 10, 12).getTime();
@@ -26,13 +28,6 @@ function txn(p: Partial<Txn> & { amount: number; type: Txn['type']; merchant: st
 const salary = txn({ type: 'credit', amount: 105500, merchant: 'Acme Software', category: 'received', mode: 'netbanking', timestamp: T0 - 7 * DAY,
   rawSms: 'Update! INR 1,05,500.00 deposited in HDFC Bank A/c XX4321 on 03-OCT-26 for NEFT Cr-ICIC0SF0002-ACME SOFTWARE PRIVATE LIMITED-RAVISHARMA-INXXXX1234.Avl bal INR 1,20,000.00' });
 
-let pass = 0;
-let total = 0;
-function check(name: string, ok: boolean, detail = '') {
-  total++;
-  if (ok) pass++;
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok || !detail ? '' : `  (${detail})`}`);
-}
 const get = (list: Txn[], t: Txn) => list.find((x) => x.id === t.id)!;
 const month = monthOf(T0);
 
@@ -131,5 +126,3 @@ const month = monthOf(T0);
   check('card bill payment is linked to the card', get(r, pay).links?.[0]?.otherId === got.id && get(r, pay).category === 'card_bill');
 }
 
-console.log(`\n${pass} / ${total} passed`);
-if (pass !== total) process.exit(1);
